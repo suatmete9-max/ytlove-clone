@@ -38,14 +38,10 @@ export default function Home() {
   const [campaignUrl, setCampaignUrl] = useState("");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
 
-  // Deposit/Withdraw Modal State (Matches Screenshots)
+  // Deposit/Withdraw Modal State
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [walletTab, setWalletTab] = useState<"Deposit" | "Withdraw">("Deposit");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("Crypto");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [depositTxId, setDepositTxId] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawAddress, setWithdrawAddress] = useState("");
   
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
@@ -67,7 +63,7 @@ export default function Home() {
           await setDoc(userRef, { 
             email: currentUser.email, 
             coins: 500, 
-            walletINR: 20 // ₹20 Signup Bonus applied
+            walletINR: 20 // ₹20 Signup Bonus
           });
           setCoins(500);
           setWalletINR(20);
@@ -85,21 +81,11 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  const calculateRequiredCoins = () => {
-    const rate = (actionType === "Subscribe" || actionType === "Follow") ? 200 : (actionType === "Like" ? 100 : 60);
-    return requiredQuantity * rate;
-  };
-
   const handleActionRedirect = () => {
-    // Redirection logic for Watch/Like/Subscribe
     let url = "https://youtube.com";
     if (platform === "Facebook") url = "https://facebook.com";
     if (platform === "Instagram") url = "https://instagram.com";
-    
-    // Redirect User
     window.open(url, "_blank");
-    
-    // Start Timer after returning (Mock logic)
     setIsPlaying(true);
   };
 
@@ -220,14 +206,14 @@ export default function Home() {
           <form className="bg-[#111111] border border-[#222] p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
             
-            {/* PLATFORMS - Unke Original Colors */}
+            {/* PLATFORMS - Exact Colors */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "YouTube" ? "bg-red-600 text-white" : "bg-[#222] text-gray-400"}`}>YouTube</button>
               <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Facebook" ? "bg-blue-600 text-white" : "bg-[#222] text-gray-400"}`}>Facebook</button>
               <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Instagram" ? "bg-pink-600 text-white" : "bg-[#222] text-gray-400"}`}>Instagram</button>
             </div>
 
-            {/* ACTIONS - Hamesha Green */}
+            {/* ACTIONS - Green Active State */}
             <div className="grid grid-cols-4 gap-2">
               {["Views", "Subscribe", "Follow", "Like"].map((act) => {
                 if (platform === "YouTube" && act === "Follow") return null;
@@ -246,7 +232,7 @@ export default function Home() {
           </form>
         )}
 
-        {/* REFER & EARN SECTION - Updated to INR */}
+        {/* REFER & EARN SECTION */}
         {bottomTab === "refer" && (
           <div className="bg-[#111111] border border-[#222] p-6 rounded-3xl text-center space-y-4">
             <h2 className="text-lg font-bold">Refer & Earn ₹10</h2>
@@ -262,7 +248,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* PROFILE & ORDERS SECTION (Matches Screenshot 777) */}
+        {/* PROFILE & ORDERS SECTION */}
         {bottomTab === "profile" && (
           <div className="space-y-4">
             <div className="bg-[#111111] border border-[#222] p-6 rounded-3xl text-center space-y-3">
@@ -296,13 +282,12 @@ export default function Home() {
         )}
       </div>
 
-      {/* EXACT DEPOSIT / WITHDRAW MODAL (Matches Screenshot 778 & 779) */}
+      {/* DEPOSIT / WITHDRAW MODAL */}
       {showDepositModal && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
           <div className="bg-[#18181b] border border-[#27272a] text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative shadow-2xl">
             <button onClick={() => setShowDepositModal(false)} className="absolute top-4 right-4 text-gray-400 font-bold bg-[#27272a] w-6 h-6 rounded-full flex items-center justify-center">✕</button>
             
-            {/* Top Toggle (Green / Dark Grey matching 778) */}
             <div className="flex bg-[#27272a] rounded-xl overflow-hidden p-1 gap-1">
               <button onClick={() => setWalletTab("Deposit")} className={`flex-1 py-2 text-sm font-bold rounded-lg ${walletTab === "Deposit" ? "bg-green-600 text-white" : "text-gray-400 bg-transparent hover:text-white"}`}>Deposit</button>
               <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-2 text-sm font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400 bg-transparent hover:text-white"}`}>Withdraw</button>
@@ -310,13 +295,11 @@ export default function Home() {
 
             {walletTab === "Deposit" ? (
               <div className="space-y-4">
-                {/* Method Toggle */}
                 <div className="flex gap-2">
                   <button onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${paymentMethod === "UPI" ? "bg-[#27272a] border-emerald-500 text-emerald-400" : "bg-[#18181b] border-[#3f3f46] text-gray-400"}`}>UPI (INR)</button>
                   <button onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${paymentMethod === "Crypto" ? "bg-[#27272a] border-amber-500 text-amber-400" : "bg-[#18181b] border-[#3f3f46] text-gray-400"}`}>Crypto (USDT)</button>
                 </div>
 
-                {/* QR Section */}
                 <div className="bg-[#27272a] p-4 rounded-xl border border-[#3f3f46] flex flex-col items-center">
                   <div className={`p-2 bg-white rounded-xl ${paymentMethod === "Crypto" ? "border-2 border-amber-500" : "border-2 border-emerald-500"}`}>
                     <img src={paymentMethod === "Crypto" ? `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}` : `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}`} className="w-32 h-32" alt="QR" />
@@ -332,7 +315,6 @@ export default function Home() {
                 <button className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl text-sm transition">Submit Payment</button>
               </div>
             ) : (
-              // WITHDRAW MODAL (Matches Screenshot 779)
               <div className="space-y-4 pt-2">
                 <div className="bg-[#27272a] p-4 rounded-xl border border-[#3f3f46] text-center">
                   <p className="text-gray-400 text-[10px] mb-1">Available Wallet Balance</p>
