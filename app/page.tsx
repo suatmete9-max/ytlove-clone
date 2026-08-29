@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDbData, increment, query, collection, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, increment, query, collection, where, onSnapshot } from "firebase/firestore";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -142,11 +142,18 @@ export default function Home() {
         </div>
       </div>
 
-      {/* LIVE ADS BANNER TOP */}
+      {/* LIVE ADS BANNER (ADSTERRA / MONETAG / UNITY LIVE AD CONTAINER) */}
       <div className="w-full max-w-md px-4 mt-3">
-        <div className="bg-[#1a1a1a] border border-dashed border-gray-700 p-2 text-center rounded-xl text-[10px] text-gray-400">
-          Advertisement <br />
-          <a href="https://www.profitablecpmrate.com" target="_blank" rel="nofollow" className="text-red-400 underline">Sponsored Ad - Click Here</a>
+        <div className="bg-[#1a1a1a] border border-dashed border-red-500/50 p-3 text-center rounded-2xl shadow-inner">
+          <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold mb-1">Live Advertisement</p>
+          <iframe 
+            src="https://www.profitablecpmrate.com/tag.min.js" 
+            className="w-full h-12 border-0 overflow-hidden bg-black/40 rounded-lg pointer-events-auto"
+            sandbox="allow-scripts allow-same-origin"
+          />
+          <a href="https://www.profitablecpmrate.com" target="_blank" rel="noopener noreferrer" className="text-xs text-red-400 font-bold underline mt-1 block">
+            Click here for Sponsor Offers & Bonus Points
+          </a>
         </div>
       </div>
 
@@ -454,7 +461,7 @@ export default function Home() {
       )}
 
       {/* BOTTOM NAV */}
-      <div className="fixed bottom-0 w-full max-w-md bg-[#111111] border-t border-[#222] flex justify-around py-3 z-20 text-gray-400">
+      <div className="bottom-nav fixed bottom-0 w-full max-w-md bg-[#111111] border-t border-[#222] flex justify-around py-3 z-20 text-gray-400">
         <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}>
           <span className="text-xl">📺</span><span className="mt-1">Watch</span>
         </button>
