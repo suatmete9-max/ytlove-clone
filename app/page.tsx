@@ -1,42 +1,87 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { auth, googleProvider } from "@/firebase";
+import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc, increment } from "firebase/firestore";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [coins, setCoins] = useState(0);
+  const [activeTab, setActiveTab] = useState<"watch" | "campaign" | "profile">("watch");
+  
+  // Video Player States
+  const [timer, setTimer] = useState(60);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [campaignUrl, setCampaignUrl] = useState("");
+  const [requiredViews, setRequiredViews] = useState(10);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        // Fetch or create user in Firestore
+        const userRef = doc(db, "users", currentUser.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          setCoins(userSnap.data().coins || 0);
+        } else {
+          await setDoc(userRef, { email: currentUser.email, coins: 100 });
+          setCoins(100);
+        }
+      }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
-  const handleGoogleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      alert("Login Error: " + error.message);
+  // Timer Counter
+  useEffect(() => {
+    let interval: any;
+    if (isPlaying && timer > 0) {
+      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
+    } else if (timer === 0 && isPlaying) {
+      handleEarnCoins();
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, timer]);
+
+  const handleEarnCoins = async () => {
+    setIsPlaying(false);
+    setTimer(60);
+    if (user) {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { coins: increment(60) });
+      setCoins((prev) => prev + 60);
+      alert("🎉 60 Coins Added to your Account!");
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth);
+  const handleCreateCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cost = requiredViews * 60;
+    if (coins < cost) {
+      alert("Not enough coins! Watch more videos to earn coins.");
+      return;
+    }
+    if (user) {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { coins: increment(-cost) });
+      setCoins((prev) => prev - cost);
+      setCampaignUrl("");
+      alert("🚀 Campaign Created Successfully!");
+    }
   };
 
   if (loading) {
     return (
       <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-gray-400">Loading ytLove...</p>
+        <p className="animate-pulse text-red-500 font-bold">Loading ytLove...</p>
       </main>
     );
   }
 
-  // AGAR USER LOGGED IN NAE HAI
   if (!user) {
     return (
       <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
@@ -48,12 +93,10 @@ export default function Home() {
           </div>
           <div>
             <h1 className="text-3xl font-bold tracking-tight">ytLove</h1>
-            <p className="text-gray-400 text-sm mt-2">
-              Watch videos, earn coins, and grow your channel with real campaigns.
-            </p>
+            <p className="text-gray-400 text-sm mt-2">Watch videos, earn coins, and grow your channel.</p>
           </div>
           <button
-            onClick={handleGoogleLogin}
+            onClick={() => signInWithPopup(auth, googleProvider)}
             className="w-full bg-white text-black font-semibold py-3 px-4 rounded-xl flex items-center justify-center space-x-3 hover:bg-gray-100 transition-all shadow-md active:scale-95"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -69,45 +112,132 @@ export default function Home() {
     );
   }
 
-  // AGAR USER LOGGED IN HAI TOH YEH DASHBOARD DIKHEGA
   return (
-    <main className="min-h-screen bg-black text-white p-6 flex flex-col items-center">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center space-x-3">
-            <img
-              src={user.photoURL || "https://via.placeholder.com/40"}
-              alt="Profile"
-              className="w-10 h-10 rounded-full border border-red-500"
-            />
+    <main className="min-h-screen bg-black text-white pb-20 flex flex-col items-center">
+      {/* Top Bar */}
+      <div className="w-full max-w-md bg-zinc-900/80 backdrop-blur-md p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center font-bold">yt</div>
+          <span className="font-bold text-lg">ytLove</span>
+        </div>
+        <div className="bg-red-500/10 border border-red-500/30 px-3 py-1 rounded-full text-red-500 font-bold text-sm">
+          🪙 {coins} Coins
+        </div>
+      </div>
+
+      <div className="w-full max-w-md p-4 space-y-6">
+        {/* WATCH TAB */}
+        {activeTab === "watch" && (
+          <div className="space-y-4">
+            <div className="relative w-full h-56 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col items-center justify-center">
+              <iframe
+                className="w-full h-full"
+                src={`https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=${isPlaying ? 1 : 0}`}
+                title="YouTube player"
+                allow="autoplay"
+              ></iframe>
+            </div>
+
+            <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
+              <div>
+                <p className="text-xs text-gray-400">Timer</p>
+                <p className="text-xl font-bold text-red-500">{timer} Seconds</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Reward</p>
+                <p className="text-xl font-bold text-green-500">+60 Coins</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsPlaying(true)}
+              disabled={isPlaying}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:bg-zinc-800 text-white font-bold py-3.5 rounded-xl transition active:scale-95"
+            >
+              {isPlaying ? "Watching Video..." : "Start Watching Video"}
+            </button>
+          </div>
+        )}
+
+        {/* CAMPAIGN TAB */}
+        {activeTab === "campaign" && (
+          <form onSubmit={handleCreateCampaign} className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 space-y-4">
+            <h2 className="text-lg font-bold">Create Campaign</h2>
             <div>
-              <p className="font-semibold text-sm">{user.displayName}</p>
+              <label className="text-xs text-gray-400 block mb-1">YouTube Video URL</label>
+              <input
+                type="url"
+                required
+                value={campaignUrl}
+                onChange={(e) => setCampaignUrl(e.target.value)}
+                placeholder="https://youtu.be/..."
+                className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">Number of Views</label>
+              <input
+                type="number"
+                min="10"
+                value={requiredViews}
+                onChange={(e) => setRequiredViews(Number(e.target.value))}
+                className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none focus:border-red-500"
+              />
+            </div>
+            <div className="text-sm text-gray-400 flex justify-between">
+              <span>Total Cost:</span>
+              <span className="font-bold text-red-500">🪙 {requiredViews * 60} Coins</span>
+            </div>
+            <button
+              type="submit"
+              className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition"
+            >
+              Add Campaign
+            </button>
+          </form>
+        )}
+
+        {/* PROFILE TAB */}
+        {activeTab === "profile" && (
+          <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 space-y-4 text-center">
+            <img src={user.photoURL || ""} className="w-16 h-16 rounded-full mx-auto border-2 border-red-500" />
+            <div>
+              <h2 className="font-bold text-lg">{user.displayName}</h2>
               <p className="text-xs text-gray-400">{user.email}</p>
             </div>
+            <button
+              onClick={() => signOut(auth)}
+              className="w-full bg-zinc-800 hover:bg-zinc-700 text-red-400 font-bold py-3 rounded-xl transition border border-zinc-700"
+            >
+              Logout
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-gray-300 px-3 py-1.5 rounded-lg border border-zinc-700"
-          >
-            Logout
-          </button>
-        </div>
+        )}
+      </div>
 
-        <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl flex justify-between items-center">
-          <span className="text-sm text-gray-300 font-medium">Your Balance:</span>
-          <span className="text-lg font-bold text-red-500">🪙 0 Coins</span>
-        </div>
-
-        <div className="space-y-4">
-          <div className="w-full h-48 bg-zinc-800 rounded-xl flex flex-col items-center justify-center border border-zinc-700 space-y-2">
-            <p className="text-2xl">📺</p>
-            <p className="text-sm text-gray-400">Watch to Earn Feature Ready</p>
-          </div>
-
-          <button className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition active:scale-95">
-            Watch Video (+60 Coins)
-          </button>
-        </div>
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 w-full max-w-md bg-zinc-900/90 backdrop-blur-md border-t border-zinc-800 flex justify-around py-3 z-50">
+        <button
+          onClick={() => setActiveTab("watch")}
+          className={`flex flex-col items-center text-xs font-semibold ${activeTab === "watch" ? "text-red-500" : "text-gray-400"}`}
+        >
+          <span>📺</span>
+          <span>Watch</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("campaign")}
+          className={`flex flex-col items-center text-xs font-semibold ${activeTab === "campaign" ? "text-red-500" : "text-gray-400"}`}
+        >
+          <span>🚀</span>
+          <span>Campaign</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`flex flex-col items-center text-xs font-semibold ${activeTab === "profile" ? "text-red-500" : "text-gray-400"}`}
+        >
+          <span>👤</span>
+          <span>Profile</span>
+        </button>
       </div>
     </main>
   );
