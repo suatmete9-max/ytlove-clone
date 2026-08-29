@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Script from "next/script";
 import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, increment, collection, getDocs, addDoc, query, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, onSnapshot } from "firebase/firestore";
 
 declare global {
   interface Window {
@@ -27,29 +27,34 @@ export default function Home() {
   const [loginStreak, setLoginStreak] = useState(0);
   const [actionCounter, setActionCounter] = useState(0);
   
-  // Original Bottom Tabs: Watch, Campaign, Wallet, Refer, Profile
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
 
-  // Video Watch States
+  // Watch State
   const [timer, setTimer] = useState(60);
+  const [rewardCoins, setRewardCoins] = useState(60);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Campaign States
+  // Campaign State
   const [platform, setPlatform] = useState<"YouTube" | "Instagram" | "Facebook">("YouTube");
   const [actionType, setActionType] = useState<"Views" | "Subscribers" | "Likes" | "Followers">("Views");
   const [campaignUrl, setCampaignUrl] = useState("");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
-  
+
+  // Wallet & Crypto State
+  const [payMethod, setPayMethod] = useState<"UPI" | "CRYPTO">("UPI");
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [utrNumber, setUtrNumber] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [withdrawAddress, setWithdrawAddress] = useState("");
+  const [withdrawAmt, setWithdrawAmt] = useState("");
+  const [isSubmittingPay, setIsSubmittingPay] = useState(false);
+
   // Orders State
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
-  // Payment Deposit Modal States
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [utrNumber, setUtrNumber] = useState("");
-  const [depositAmount, setDepositAmount] = useState("");
-  const [isSubmittingPay, setIsSubmittingPay] = useState(false);
-
   const UPI_ID = "paytmqr5mq7io@ptys";
+  const CRYPTO_USDT_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d8976F";
 
   const triggerSmartInterstitial = () => {
     const nextCount = actionCounter + 1;
@@ -115,32 +120,52 @@ export default function Home() {
       try {
         window.unityAds.show(PLACEMENT_REWARDED);
       } catch (e) {
-        console.log("Rewarded Video Shown");
+        console.log("Rewarded Shown");
       }
     }
 
     if (user) {
-      const reward = 60;
       const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { coins: increment(reward) });
-      setCoins((prev) => prev + reward);
-      alert(`🎉 Reward Claimed! +${reward} Points Added.`);
+      await updateDoc(userRef, { coins: increment(rewardCoins) });
+      setCoins((prev) => prev + rewardCoins);
+      alert(`🎉 Reward Claimed! +${rewardCoins} Coins Added.`);
     }
   };
 
-  const claimDailyBonus = async () => {
-    if (!user) return;
+  const calculateRequiredCoins = () => {
+    const rate = (actionType === "Subscribers" || actionType === "Followers") ? 200 : (actionType === "Likes" ? 100 : 60);
+    return requiredQuantity * rate;
+  };
+
+  const handleCreateCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
     triggerSmartInterstitial();
-    const rewards = [100, 200, 300, 400, 500, 700, 1000];
-    const newStreak = (loginStreak % 7) + 1;
-    const addedCoins = rewards[newStreak - 1];
+    const totalCost = calculateRequiredCoins();
+    
+    if (coins < totalCost) {
+      if (confirm(`Coins short by ${totalCost - coins}! Click OK to Add Funds / Buy Coins.`)) setShowDepositModal(true);
+      return;
+    }
 
-    const userRef = doc(db, "users", user.uid);
-    await updateDoc(userRef, { loginStreak: newStreak, coins: increment(addedCoins) });
+    if (user) {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { coins: increment(-totalCost) });
+      setCoins((prev) => prev - totalCost);
 
-    setLoginStreak(newStreak);
-    setCoins(prev => prev + addedCoins);
-    alert(`🎉 Day ${newStreak} Claimed! +${addedCoins} Points`);
+      await addDoc(collection(db, "orders"), {
+        userId: user.uid,
+        title: `${platform} ${actionType} (${requiredQuantity})`,
+        type: "Campaign",
+        url: campaignUrl,
+        quantity: requiredQuantity,
+        costCoins: totalCost,
+        status: "Active",
+        createdAt: new Date().toISOString()
+      });
+
+      setCampaignUrl("");
+      alert("🚀 Campaign Created Successfully!");
+    }
   };
 
   const handleVerifyDeposit = async (e: React.FormEvent) => {
@@ -148,33 +173,24 @@ export default function Home() {
     const cleanUtr = utrNumber.trim();
     const amt = Number(depositAmount);
 
-    if (!cleanUtr || cleanUtr.length < 8) return alert("❌ Valid UTR enter karein!");
+    if (!cleanUtr) return alert("❌ Transaction Hash / UTR enter karein!");
     if (!amt || amt <= 0) return alert("❌ Valid Amount enter karein!");
 
     if (user) {
       setIsSubmittingPay(true);
       try {
-        const utrRef = doc(db, "used_utrs", cleanUtr);
-        const utrSnap = await getDoc(utrRef);
-
-        if (utrSnap.exists()) {
-          setIsSubmittingPay(false);
-          return alert("🚨 UTR already used!");
-        }
-
-        await setDoc(utrRef, { userId: user.uid, amount: amt, createdAt: new Date().toISOString() });
-
         await addDoc(collection(db, "orders"), {
           userId: user.uid,
-          title: `Deposit ₹${amt}`,
+          title: `Deposit ${payMethod} (₹${amt})`,
           type: "Deposit",
           utr: cleanUtr,
           amount: amt,
+          method: payMethod,
           status: "Pending",
           createdAt: new Date().toISOString()
         });
 
-        alert("⏱️ Payment Submitted for Approval!");
+        alert("⏱️ Deposit Request Submitted for Verification!");
         setShowDepositModal(false);
         setUtrNumber("");
         setDepositAmount("");
@@ -186,34 +202,30 @@ export default function Home() {
     }
   };
 
-  const handleCreateCampaign = async (e: React.FormEvent) => {
+  const handleWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
-    triggerSmartInterstitial();
-    const ratePerItem = actionType === "Subscribers" || actionType === "Followers" ? 250 : 60;
-    const requiredCoins = requiredQuantity * ratePerItem;
-    
-    if (coins < requiredCoins) {
-      if (confirm(`Coins short by ${requiredCoins - coins}! Click OK to Add Funds.`)) setShowDepositModal(true);
-      return;
-    }
+    const amt = Number(withdrawAmt);
+    if (!amt || amt <= 0 || amt > walletINR) return alert("❌ Invalid withdrawal amount!");
 
     if (user) {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { coins: increment(-requiredCoins) });
-      setCoins((prev) => prev - requiredCoins);
-
       await addDoc(collection(db, "orders"), {
         userId: user.uid,
-        title: `${platform} ${actionType} (${requiredQuantity})`,
-        type: "Campaign",
-        url: campaignUrl,
-        quantity: requiredQuantity,
-        status: "Completed",
+        title: `Withdrawal Request (₹${amt})`,
+        type: "Withdrawal",
+        address: withdrawAddress,
+        amount: amt,
+        status: "Pending",
         createdAt: new Date().toISOString()
       });
 
-      setCampaignUrl("");
-      alert("🚀 Campaign Created Successfully!");
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { walletINR: increment(-amt) });
+      setWalletINR(prev => prev - amt);
+
+      alert("🎉 Withdrawal Request Placed!");
+      setShowWithdrawModal(false);
+      setWithdrawAmt("");
+      setWithdrawAddress("");
     }
   };
 
@@ -238,17 +250,14 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white pb-36 flex flex-col items-center relative overflow-x-hidden">
       
-      {/* Unity Ads Script Integration */}
       <Script 
         src="https://unityads.unity3d.com/sdk/3.0/unityads.js" 
         onLoad={() => {
-          if (window.unityAds) {
-            window.unityAds.init(UNITY_GAME_ID, true);
-          }
+          if (window.unityAds) window.unityAds.init(UNITY_GAME_ID, true);
         }}
       />
 
-      {/* ORIGINAL TOP HEADER WITH LOGO, COINS & WALLET INR */}
+      {/* HEADER */}
       <div className="w-full max-w-md bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 z-40">
         <div className="flex items-center space-x-2">
           <button onClick={() => setIsSidebarOpen(true)} className="p-1 text-xl font-bold text-gray-300">☰</button>
@@ -268,7 +277,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* SIDEBAR DRAWER MENU */}
+      {/* SIDEBAR DRAWER */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex">
           <div className="w-4/5 max-w-xs bg-zinc-900 border-r border-zinc-800 text-white h-full p-5 flex flex-col justify-between shadow-2xl">
@@ -284,11 +293,11 @@ export default function Home() {
               </div>
 
               <div className="space-y-2 text-sm font-medium">
-                <button onClick={() => { claimDailyBonus(); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-zinc-800 text-gray-200">
-                  <span>📅</span> <span>Daily Bonus (Streak {loginStreak})</span>
-                </button>
                 <button onClick={() => { setShowDepositModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-zinc-800 text-gray-200">
-                  <span>💳</span> <span>Add Funds Wallet</span>
+                  <span>💳</span> <span>Add Funds / Crypto</span>
+                </button>
+                <button onClick={() => { setShowWithdrawModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-zinc-800 text-gray-200">
+                  <span>💸</span> <span>Withdraw Funds</span>
                 </button>
                 <button onClick={() => signOut(auth)} className="w-full flex items-center space-x-3 p-2.5 rounded-xl hover:bg-red-950/50 text-red-500 font-bold">
                   <span>🚪</span> <span>Log out</span>
@@ -300,92 +309,118 @@ export default function Home() {
         </div>
       )}
 
-      {/* MAIN CONTAINER CONTENT */}
+      {/* MAIN CONTENT AREA */}
       <div className="w-full max-w-md p-4 space-y-4">
 
-        {/* WATCH TAB (ORIGINAL WHITE CARD UI) */}
+        {/* WATCH SECTION (COIN REWARD DISPLAYED) */}
         {bottomTab === "watch" && (
-          <div className="bg-white text-black rounded-3xl p-6 shadow-xl space-y-6 relative">
+          <div className="bg-zinc-900 border border-zinc-800 text-white rounded-3xl p-6 shadow-xl space-y-6 relative">
             <div className="flex flex-col items-center text-center space-y-3 pt-2">
-              <div className="w-32 h-32 bg-zinc-800 rounded-3xl overflow-hidden border-4 border-gray-100 shadow-md">
-                <img src="https://picsum.photos/300/300" className="w-full h-full object-cover" alt="Target" />
+              <div className="w-32 h-32 bg-zinc-800 rounded-3xl overflow-hidden border-4 border-zinc-700 shadow-md">
+                <img src="https://picsum.photos/300/300" className="w-full h-full object-cover" alt="Video Preview" />
               </div>
-              <h2 className="font-bold text-lg text-gray-800">KnightxKenshin</h2>
+              <h2 className="font-bold text-lg text-gray-200">KnightxKenshin</h2>
             </div>
 
             <div className="flex justify-center space-x-6">
-              <div className="flex items-center space-x-2 bg-gray-50 px-4 py-2 rounded-2xl border border-gray-200">
+              <div className="flex items-center space-x-2 bg-zinc-800 px-4 py-2 rounded-2xl border border-zinc-700">
                 <span className="text-red-500 text-xl">❤️</span>
                 <div className="text-left">
-                  <p className="font-bold text-sm text-gray-800">60</p>
-                  <p className="text-[10px] text-gray-400 -mt-1">Points</p>
+                  <p className="font-bold text-sm text-white">{rewardCoins}</p>
+                  <p className="text-[10px] text-gray-400 -mt-1">Coins Earned</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2 bg-gray-50 px-4 py-2 rounded-2xl border border-gray-200">
-                <span className="text-gray-700 text-xl">⏱️</span>
+              <div className="flex items-center space-x-2 bg-zinc-800 px-4 py-2 rounded-2xl border border-zinc-700">
+                <span className="text-gray-300 text-xl">⏱️</span>
                 <div className="text-left">
-                  <p className="font-bold text-sm text-gray-800">{timer}</p>
+                  <p className="font-bold text-sm text-white">{timer}</p>
                   <p className="text-[10px] text-gray-400 -mt-1">Seconds</p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
-              <button onClick={() => setIsPlaying(true)} disabled={isPlaying} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-2xl capitalize active:scale-95 transition">
-                {isPlaying ? "Watching..." : "Watch"}
+              <button onClick={() => setIsPlaying(true)} disabled={isPlaying} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">
+                {isPlaying ? "Watching..." : "Watch & Earn"}
               </button>
-              <button onClick={() => { setTimer(120); triggerSmartInterstitial(); }} className="bg-black text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">
+              <button onClick={() => { setTimer(90); setRewardCoins(90); triggerSmartInterstitial(); }} className="bg-zinc-800 text-white font-bold py-3.5 rounded-2xl border border-zinc-700 active:scale-95 transition">
                 Change
               </button>
             </div>
           </div>
         )}
 
-        {/* CAMPAIGN TAB */}
+        {/* CAMPAIGN SECTION (WITH LIVE COIN CALCULATION & EXCHANGE TYPE) */}
         {bottomTab === "campaign" && (
           <form onSubmit={handleCreateCampaign} className="bg-zinc-900 border border-zinc-800 text-white p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
+            
+            {/* PLATFORM SELECTOR */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "YouTube" ? "bg-red-600 border-red-600" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>YouTube</button>
               <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 border-pink-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Instagram</button>
               <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Facebook" ? "bg-[#1877F2] border-[#1877F2]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Facebook</button>
             </div>
+
+            {/* EXCHANGE TYPE SELECTOR */}
+            <div className="grid grid-cols-3 gap-2">
+              <button type="button" onClick={() => setActionType("Views")} className={`py-1.5 text-[11px] font-bold rounded-xl border ${actionType === "Views" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800/50 border-zinc-800 text-gray-400"}`}>Views</button>
+              <button type="button" onClick={() => setActionType("Likes")} className={`py-1.5 text-[11px] font-bold rounded-xl border ${actionType === "Likes" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800/50 border-zinc-800 text-gray-400"}`}>Like4Like</button>
+              <button type="button" onClick={() => setActionType(platform === "Instagram" ? "Followers" : "Subscribers")} className={`py-1.5 text-[11px] font-bold rounded-xl border ${actionType === "Subscribers" || actionType === "Followers" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800/50 border-zinc-800 text-gray-400"}`}>
+                {platform === "Instagram" ? "Follow2Follow" : "Sub4Sub"}
+              </button>
+            </div>
+
             <input type="url" required value={campaignUrl} onChange={(e) => setCampaignUrl(e.target.value)} placeholder={`https://${platform.toLowerCase()}.com/...`} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
-            <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
-            <button type="submit" className="w-full font-bold py-3.5 rounded-xl bg-red-600 text-white">Add Campaign</button>
+            
+            <div className="space-y-1">
+              <label className="text-xs text-gray-400">Target Quantity:</label>
+              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
+            </div>
+
+            {/* LIVE COIN DISPLAY */}
+            <div className="bg-zinc-800/70 p-3 rounded-2xl border border-zinc-700/50 flex justify-between items-center text-xs">
+              <span className="text-gray-400">Total Coins Required:</span>
+              <span className="font-bold text-amber-400 text-sm">🪙 {calculateRequiredCoins()} Coins</span>
+            </div>
+
+            <button type="submit" className="w-full font-bold py-3.5 rounded-xl bg-red-600 text-white active:scale-95 transition">Add Campaign</button>
           </form>
         )}
 
-        {/* WALLET TAB */}
+        {/* WALLET SECTION WITH CRYPTO & ADD FUND OPTIONS */}
         {bottomTab === "wallet" && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl space-y-4">
-            <h2 className="text-lg font-bold">Wallet & Deposit</h2>
+            <h2 className="text-lg font-bold">Wallet & Payments</h2>
             <div className="bg-zinc-800 p-4 rounded-2xl flex justify-between items-center">
-              <span>Balance:</span>
+              <span>INR Balance:</span>
               <span className="font-bold text-green-400 text-xl">₹{walletINR}</span>
             </div>
-            <button onClick={() => setShowDepositModal(true)} className="w-full bg-green-600 font-bold py-3 rounded-xl">Add Funds</button>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setShowDepositModal(true)} className="bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Add Funds / Deposit</button>
+              <button onClick={() => setShowWithdrawModal(true)} className="bg-amber-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Withdraw</button>
+            </div>
           </div>
         )}
 
-        {/* REFER TAB */}
+        {/* REFER SECTION */}
         {bottomTab === "refer" && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-4">
             <h2 className="text-lg font-bold">Refer & Earn</h2>
-            <p className="text-xs text-gray-400">Share your link to earn bonus rewards!</p>
+            <p className="text-xs text-gray-400">Share your link to earn +500 Coins per Referral!</p>
             <div className="bg-zinc-800 p-3 rounded-xl text-xs font-mono break-all">{referralLink}</div>
-            <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("🎉 Link Copied!"); }} className="w-full bg-red-600 font-bold py-3 rounded-xl">Copy Referral Link</button>
+            <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("🎉 Referral Link Copied!"); }} className="w-full bg-red-600 font-bold py-3 rounded-xl active:scale-95 transition">Copy Link</button>
           </div>
         )}
 
-        {/* PROFILE TAB (SCREENSHOT MATCHING LOOK) */}
+        {/* PROFILE SECTION */}
         {bottomTab === "profile" && (
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl flex flex-col items-center space-y-3 text-center">
               <div className="w-16 h-16 bg-teal-500 rounded-full flex items-center justify-center font-bold text-2xl text-white">
-                {user.displayName ? user.displayName[0] : "B"}
+                {user.displayName ? user.displayName[0] : "U"}
               </div>
-              <h2 className="font-bold text-lg">{user.displayName || "Bhat Mehraj"}</h2>
+              <h2 className="font-bold text-lg">{user.displayName || "User"}</h2>
               <p className="text-xs text-gray-400 -mt-2">{user.email}</p>
               <button onClick={() => signOut(auth)} className="bg-zinc-800 text-red-500 hover:bg-zinc-700 font-bold px-6 py-2 rounded-xl text-xs">Logout</button>
             </div>
@@ -412,28 +447,59 @@ export default function Home() {
         )}
       </div>
 
-      {/* DEPOSIT MODAL */}
+      {/* DEPOSIT MODAL WITH CRYPTO & UPI TOGGLE */}
       {showDepositModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative">
             <button onClick={() => setShowDepositModal(false)} className="absolute top-4 right-4 text-gray-400 font-bold">✕</button>
-            <h3 className="font-bold text-base">Add Payment</h3>
-            <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 flex flex-col items-center space-y-2 text-center">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=paytmqr5mq7io@ptys" className="w-36 h-36 rounded-lg border border-zinc-700" />
-              <p className="text-xs font-mono text-gray-400">UPI ID: {UPI_ID}</p>
+            <h3 className="font-bold text-base">Add Funds</h3>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setPayMethod("UPI")} className={`py-1.5 text-xs font-bold rounded-xl border ${payMethod === "UPI" ? "bg-emerald-600 border-emerald-500" : "bg-zinc-800 border-zinc-700"}`}>UPI QR</button>
+              <button type="button" onClick={() => setPayMethod("CRYPTO")} className={`py-1.5 text-xs font-bold rounded-xl border ${payMethod === "CRYPTO" ? "bg-amber-600 border-amber-500" : "bg-zinc-800 border-zinc-700"}`}>Crypto (USDT)</button>
             </div>
+
+            <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 flex flex-col items-center space-y-2 text-center">
+              {payMethod === "UPI" ? (
+                <>
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=paytmqr5mq7io@ptys" className="w-32 h-32 rounded-lg border border-zinc-700" />
+                  <p className="text-[11px] font-mono text-gray-400">UPI ID: {UPI_ID}</p>
+                </>
+              ) : (
+                <>
+                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=0x71C7656EC7ab88b098defB751B7401B5f6d8976F" className="w-32 h-32 rounded-lg border border-zinc-700" />
+                  <p className="text-[10px] font-mono text-gray-400 break-all">USDT Address: {CRYPTO_USDT_ADDRESS}</p>
+                </>
+              )}
+            </div>
+
             <form onSubmit={handleVerifyDeposit} className="space-y-3">
-              <input type="number" placeholder="Amount (INR)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
-              <input type="text" placeholder="Enter UTR / TxHash No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
-              <button type="submit" disabled={isSubmittingPay} className="w-full bg-green-600 text-white font-bold py-2.5 rounded-xl text-xs">
-                {isSubmittingPay ? "Verifying..." : "Submit Payment"}
+              <input type="number" placeholder="Amount (INR / USDT)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+              <input type="text" placeholder="Enter Transaction Hash / UTR No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+              <button type="submit" disabled={isSubmittingPay} className="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">
+                {isSubmittingPay ? "Submitting..." : "Submit Payment"}
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* STICKY BOTTOM UNITY BANNER AD CONTAINER */}
+      {/* WITHDRAWAL MODAL */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative">
+            <button onClick={() => setShowWithdrawModal(false)} className="absolute top-4 right-4 text-gray-400 font-bold">✕</button>
+            <h3 className="font-bold text-base">Withdraw Funds</h3>
+            <form onSubmit={handleWithdrawal} className="space-y-3">
+              <input type="number" placeholder="Amount (INR)" value={withdrawAmt} onChange={(e) => setWithdrawAmt(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+              <input type="text" placeholder="UPI ID / Wallet Address" value={withdrawAddress} onChange={(e) => setWithdrawAddress(e.target.value)} required className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+              <button type="submit" className="w-full bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs">Confirm Withdrawal</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* UNITY BANNER CONTAINER */}
       <div className="fixed bottom-16 w-full max-w-md bg-black border-t border-zinc-800 py-1 flex items-center justify-center z-30">
         <div className="text-[10px] text-gray-400">
           <span className="bg-yellow-500 text-black px-1 font-bold rounded mr-1">Unity Ad</span>
@@ -441,7 +507,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ORIGINAL YTLove BOTTOM NAVIGATION BAR (MATCHING YOUR SCREENSHOT) */}
+      {/* BOTTOM NAVIGATION */}
       <div className="fixed bottom-0 w-full max-w-md bg-zinc-950 border-t border-zinc-800 flex justify-around py-2.5 z-40 text-gray-400">
         <button onClick={() => { setBottomTab("watch"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}>
           <span className="text-base">📺</span>
