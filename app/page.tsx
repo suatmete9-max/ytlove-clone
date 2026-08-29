@@ -6,9 +6,17 @@ import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, increment, collection, addDoc, query, where, onSnapshot } from "firebase/firestore";
 
+declare global {
+  interface Window {
+    unityAds?: any;
+  }
+}
+
 export default function Home() {
   const UNITY_GAME_ID = "800364184";
   const PLACEMENT_BANNER = "Banner_Android";
+  const PLACEMENT_INTERSTITIAL = "Interstitial_Android";
+  const PLACEMENT_REWARDED = "Rewarded_Android";
 
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,6 +24,9 @@ export default function Home() {
   
   const [coins, setCoins] = useState(0);
   const [walletINR, setWalletINR] = useState(0);
+  const [loginStreak, setLoginStreak] = useState(0);
+  const [lastClaimDate, setLastClaimDate] = useState<string>("");
+  const [actionCounter, setActionCounter] = useState(0);
   
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
 
@@ -30,7 +41,7 @@ export default function Home() {
   const [campaignUrl, setCampaignUrl] = useState("");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
 
-  // Ad Simulator Modal
+  // Ad Simulator & Unity Modal State
   const [showAdModal, setShowAdModal] = useState(false);
   const [adTimer, setAdTimer] = useState(5);
 
@@ -39,15 +50,23 @@ export default function Home() {
   const [depositAmount, setDepositAmount] = useState("");
   const [utrNumber, setUtrNumber] = useState("");
 
+  // Orders History State
+  const [userOrders, setUserOrders] = useState<any[]>([]);
+
   const UPI_ID = "paytmqr5mq7io@ptys";
 
-  useEffect(() => {
-    if (platform === "YouTube") {
-      setActionType("Views");
-    } else if (platform === "Facebook" || platform === "Instagram") {
-      setActionType("Views");
+  const triggerSmartInterstitial = () => {
+    const nextCount = actionCounter + 1;
+    setActionCounter(nextCount);
+    if (nextCount % 3 === 0) {
+      if (window.unityAds && window.unityAds.isReady && window.unityAds.isReady(PLACEMENT_INTERSTITIAL)) {
+        try { window.unityAds.show(PLACEMENT_INTERSTITIAL); } catch (e) { console.log("Ad Error"); }
+      } else {
+        setShowAdModal(true);
+        setAdTimer(3);
+      }
     }
-  }, [platform]);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -60,10 +79,26 @@ export default function Home() {
           const data = userSnap.data();
           setCoins(data.coins || 0);
           setWalletINR(data.walletINR || 0);
+          setLoginStreak(data.loginStreak || 0);
+          setLastClaimDate(data.lastClaimDate || "");
         } else {
-          await setDoc(userRef, { email: currentUser.email, coins: 500, walletINR: 0 });
+          await setDoc(userRef, { 
+            email: currentUser.email, 
+            coins: 500, 
+            walletINR: 0,
+            loginStreak: 0,
+            lastClaimDate: ""
+          });
           setCoins(500);
         }
+
+        // Fetch Order History Live
+        const q = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
+        onSnapshot(q, (snapshot) => {
+          const ordersData: any[] = [];
+          snapshot.forEach((doc) => ordersData.push({ id: doc.id, ...doc.data() }));
+          setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        });
       }
       setLoading(false);
     });
@@ -83,17 +118,13 @@ export default function Home() {
   const handleEarnCoins = async () => {
     setIsPlaying(false);
     setTimer(60);
-    setShowAdModal(true);
-    setAdTimer(5);
 
-    let adCount = 5;
-    const adInterval = setInterval(() => {
-      adCount--;
-      setAdTimer(adCount);
-      if (adCount <= 0) {
-        clearInterval(adInterval);
-      }
-    }, 1000);
+    if (window.unityAds && window.unityAds.isReady && window.unityAds.isReady(PLACEMENT_REWARDED)) {
+      try { window.unityAds.show(PLACEMENT_REWARDED); } catch (e) { console.log(e); }
+    } else {
+      setShowAdModal(true);
+      setAdTimer(5);
+    }
   };
 
   const claimAdReward = async () => {
@@ -106,6 +137,32 @@ export default function Home() {
     }
   };
 
+  const claimDailyBonus = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    if (lastClaimDate === today) {
+      alert("❌ Aapne aaj ka bonus pehle hi claim kar liya hai!");
+      return;
+    }
+
+    if (user) {
+      const newStreak = loginStreak + 1;
+      const bonusCoins = 100;
+
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { 
+        coins: increment(bonusCoins),
+        loginStreak: newStreak,
+        lastClaimDate: today
+      });
+
+      setCoins((prev) => prev + bonusCoins);
+      setLoginStreak(newStreak);
+      setLastClaimDate(today);
+
+      alert(`🎁 Daily Bonus Claimed! +${bonusCoins} Coins added.`);
+    }
+  };
+
   const calculateRequiredCoins = () => {
     const rate = (actionType === "Subscribe" || actionType === "Follow") ? 200 : (actionType === "Like" ? 100 : 60);
     return requiredQuantity * rate;
@@ -113,10 +170,11 @@ export default function Home() {
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
+    triggerSmartInterstitial();
     const totalCost = calculateRequiredCoins();
     
     if (coins < totalCost) {
-      if (confirm(`Coins short by ${totalCost - coins}! Click OK to Buy Points.`)) setShowDepositModal(true);
+      if (confirm(`Coins kam hain! Total ${totalCost} Coins chahiye. Add Funds par jayein?`)) setShowDepositModal(true);
       return;
     }
 
@@ -157,9 +215,18 @@ export default function Home() {
     );
   }
 
+  const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "ytlove.vercel.app"}?ref=${user.uid}`;
+
   return (
     <main className="min-h-screen bg-black text-white pb-36 flex flex-col items-center relative overflow-x-hidden">
       
+      <Script 
+        src="https://unityads.unity3d.com/sdk/3.0/unityads.js" 
+        onLoad={() => {
+          if (window.unityAds) window.unityAds.init(UNITY_GAME_ID, true);
+        }}
+      />
+
       {/* HEADER */}
       <div className="w-full max-w-md bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center sticky top-0 z-40">
         <div className="flex items-center space-x-2">
@@ -180,52 +247,60 @@ export default function Home() {
         </div>
       </div>
 
-      {/* SIDEBAR MATCHING SCREENSHOT EXACTLY */}
+      {/* SIDEBAR WITH DAILY BONUS & PROFILE LINK */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex">
           <div className="w-4/5 max-w-xs bg-white text-black h-full p-5 flex flex-col justify-between shadow-2xl rounded-r-3xl overflow-y-auto">
             <div className="space-y-5">
               
-              {/* Profile Header */}
-              <div className="flex items-center space-x-3 pt-2">
-                <div className="w-14 h-14 bg-teal-600 text-white rounded-2xl flex items-center justify-center font-bold text-2xl">
-                  {user.displayName ? user.displayName[0] : "B"}
+              {/* Working Profile Header Click */}
+              <div 
+                onClick={() => { setBottomTab("profile"); setIsSidebarOpen(false); }} 
+                className="flex items-center space-x-3 pt-2 cursor-pointer hover:bg-gray-100 p-2 rounded-2xl transition"
+              >
+                <div className="w-12 h-12 bg-teal-600 text-white rounded-2xl flex items-center justify-center font-bold text-xl">
+                  {user.displayName ? user.displayName[0] : "U"}
                 </div>
-                <div>
-                  <h3 className="font-bold text-base text-gray-900">{user.displayName || "Bhat Mehraj"}</h3>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                <div className="overflow-hidden">
+                  <h3 className="font-bold text-sm text-gray-900 truncate">{user.displayName || "User"}</h3>
+                  <p className="text-[11px] text-gray-500 truncate">{user.email}</p>
                 </div>
               </div>
 
               <hr className="border-gray-200" />
 
               {/* Sidebar Menu Options */}
-              <div className="space-y-3 text-sm font-medium text-gray-700">
+              <div className="space-y-2 text-sm font-medium text-gray-700">
+                <button onClick={claimDailyBonus} className="w-full flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-bold">
+                  <span className="flex items-center space-x-2"><span>🎁</span> <span>Daily Login Bonus</span></span>
+                  <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">+100</span>
+                </button>
+
                 <button onClick={() => { setShowDepositModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>🤍⁺</span> <span>Buy Points</span>
                 </button>
-                <button onClick={() => alert("VIP Membership Activated!")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
+                <button onClick={() => alert("VIP Membership Active!")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>🛡️</span> <span>Become a VIP Member</span>
                 </button>
                 <button onClick={() => alert("Shake phone to win rewards!")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>🤍</span> <span>Shake & Win</span>
                 </button>
-                <button onClick={() => alert("FAQs section")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
+                <button onClick={() => alert("FAQs Section")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>❓</span> <span>Frequently Asked Questions</span>
                 </button>
                 <button onClick={() => alert("Privacy Policy")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>🛡️</span> <span>Privacy Policy</span>
                 </button>
-                <button onClick={() => alert("Share Link Copied!")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
+                <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("Referral Link Copied!"); }} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>🔗</span> <span>Share the App</span>
                 </button>
                 <button onClick={() => alert("Thank you for rating!")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>⭐</span> <span>Rate the App</span>
                 </button>
-                <button onClick={() => alert("Contact Support")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
+                <button onClick={() => alert("Support Team Contacted")} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl">
                   <span>💬</span> <span>Contact Us</span>
                 </button>
-                <button onClick={() => signOut(auth)} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl text-gray-800">
+                <button onClick={() => signOut(auth)} className="w-full flex items-center space-x-3 p-2 hover:bg-gray-100 rounded-xl text-red-600 font-bold">
                   <span>🚪</span> <span>Log out</span>
                 </button>
               </div>
@@ -240,7 +315,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* MAIN CONTAINER */}
+      {/* MAIN CONTENT AREA */}
       <div className="w-full max-w-md p-4 space-y-4">
 
         {/* WATCH SECTION */}
@@ -274,26 +349,24 @@ export default function Home() {
               <button onClick={() => setIsPlaying(true)} disabled={isPlaying} className="bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-2xl active:scale-95 transition">
                 {isPlaying ? "Watching..." : "Watch & Earn"}
               </button>
-              <button onClick={() => { setTimer(90); setRewardCoins(90); }} className="bg-zinc-800 text-white font-bold py-3.5 rounded-2xl border border-zinc-700 active:scale-95 transition">
+              <button onClick={() => { setTimer(90); setRewardCoins(90); triggerSmartInterstitial(); }} className="bg-zinc-800 text-white font-bold py-3.5 rounded-2xl border border-zinc-700 active:scale-95 transition">
                 Change
               </button>
             </div>
           </div>
         )}
 
-        {/* CAMPAIGN SECTION (YOUTUBE, FACEBOOK, INSTAGRAM OPTIONS) */}
+        {/* CAMPAIGN SECTION */}
         {bottomTab === "campaign" && (
           <form onSubmit={handleCreateCampaign} className="bg-zinc-900 border border-zinc-800 text-white p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
             
-            {/* PLATFORM SELECTOR */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "YouTube" ? "bg-red-600 border-red-600" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>YouTube</button>
               <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Facebook" ? "bg-[#1877F2] border-[#1877F2]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Facebook</button>
               <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 border-pink-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Instagram</button>
             </div>
 
-            {/* DYNAMIC ACTION TYPES BASED ON PLATFORM */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setActionType("Views")} className={`py-2 text-xs font-bold rounded-xl border ${actionType === "Views" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Views</button>
               
@@ -311,7 +384,7 @@ export default function Home() {
             <input type="url" required value={campaignUrl} onChange={(e) => setCampaignUrl(e.target.value)} placeholder={`https://${platform.toLowerCase()}.com/...`} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
             
             <div className="space-y-1">
-              <label className="text-xs text-gray-400">Quantity:</label>
+              <label className="text-xs text-gray-400">Target Quantity:</label>
               <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
             </div>
 
@@ -332,39 +405,74 @@ export default function Home() {
               <span>Balance:</span>
               <span className="font-bold text-green-400 text-xl">₹{walletINR}</span>
             </div>
-            <button onClick={() => setShowDepositModal(true)} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Add Funds</button>
+            <button onClick={() => setShowDepositModal(true)} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Add Funds / Buy Coins</button>
           </div>
         )}
 
-        {/* REFER SECTION */}
+        {/* WORKING REFER & EARN WITH LINK DISPLAY */}
         {bottomTab === "refer" && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-4">
             <h2 className="text-lg font-bold">Refer & Earn</h2>
-            <p className="text-xs text-gray-400">Earn rewards per successful referral!</p>
-            <button onClick={() => alert("Referral Link Copied!")} className="w-full bg-red-600 font-bold py-3 rounded-xl">Copy Referral Link</button>
+            <p className="text-xs text-gray-400">Share your link and earn +500 Coins per Referral!</p>
+            
+            <div className="bg-zinc-800 p-3 rounded-xl text-xs font-mono break-all text-amber-400 border border-zinc-700">
+              {referralLink}
+            </div>
+
+            <button 
+              onClick={() => { navigator.clipboard.writeText(referralLink); alert("🎉 Referral Link Copied!"); }} 
+              className="w-full bg-red-600 font-bold py-3 rounded-xl active:scale-95 transition"
+            >
+              Copy Link
+            </button>
           </div>
         )}
 
-        {/* PROFILE SECTION */}
+        {/* PROFILE SECTION WITH RESTORED ORDER HISTORY */}
         {bottomTab === "profile" && (
-          <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-4">
-            <h2 className="font-bold text-lg">{user.displayName || "User"}</h2>
-            <p className="text-xs text-gray-400">{user.email}</p>
-            <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs">Logout</button>
+          <div className="space-y-4">
+            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-3">
+              <div className="w-16 h-16 bg-teal-600 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto">
+                {user.displayName ? user.displayName[0] : "U"}
+              </div>
+              <h2 className="font-bold text-lg">{user.displayName || "User"}</h2>
+              <p className="text-xs text-gray-400 -mt-2">{user.email}</p>
+              <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs">Logout</button>
+            </div>
+
+            {/* ORDER HISTORY RESTORED */}
+            <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl space-y-3">
+              <h3 className="font-bold text-sm">📋 My Orders & Activity</h3>
+              {userOrders.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-4">No recent orders found.</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {userOrders.map((ord) => (
+                    <div key={ord.id} className="bg-zinc-800 p-3 rounded-xl flex justify-between items-center text-xs border border-zinc-700/50">
+                      <div>
+                        <p className="font-bold text-white">{ord.title}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <span className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded-full font-bold text-[10px]">{ord.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
 
-      {/* AD SIMULATOR MODAL (SOLVES NO AD DISPLAY PROBLEM IN BROWSER) */}
+      {/* UNITY AD SIMULATOR MODAL (WORKAROUND FOR WEB BROWSER REWARDED ADS) */}
       {showAdModal && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-yellow-500 rounded-3xl p-6 w-full max-w-sm text-center space-y-4 relative">
+          <div className="bg-zinc-900 border border-yellow-500 rounded-3xl p-6 w-full max-w-sm text-center space-y-4 relative shadow-2xl">
             <div className="bg-yellow-500 text-black font-bold text-xs px-3 py-1 rounded-full w-max mx-auto">UNITY ADS REWARDED</div>
-            <h3 className="text-lg font-bold">Watching Ad...</h3>
+            <h3 className="text-lg font-bold">Watching Video Ad...</h3>
             <p className="text-xs text-gray-400">Ad completes in {adTimer} seconds</p>
             
             {adTimer <= 0 ? (
-              <button onClick={claimAdReward} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs animate-bounce">
+              <button onClick={claimAdReward} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl text-xs animate-bounce">
                 Claim {rewardCoins} Coins!
               </button>
             ) : (
@@ -386,32 +494,40 @@ export default function Home() {
               <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=paytmqr5mq7io@ptys" className="w-32 h-32 rounded-lg border border-zinc-700" />
               <p className="text-[11px] font-mono text-gray-400">UPI ID: {UPI_ID}</p>
             </div>
-            <input type="number" placeholder="Amount (INR)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white" />
-            <input type="text" placeholder="Transaction / UTR No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white" />
-            <button onClick={() => { alert("Payment Submitted!"); setShowDepositModal(false); }} className="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">Submit</button>
+            <input type="number" placeholder="Amount (INR)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+            <input type="text" placeholder="Transaction / UTR No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
+            <button onClick={() => { alert("Payment Request Submitted!"); setShowDepositModal(false); }} className="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">Submit</button>
           </div>
         </div>
       )}
 
+      {/* FIXED BANNER AD AT BOTTOM */}
+      <div className="fixed bottom-16 w-full max-w-md bg-zinc-900 border-t border-zinc-800 py-1 flex items-center justify-center z-30">
+        <div className="text-[10px] text-gray-400 flex items-center space-x-2">
+          <span className="bg-yellow-500 text-black px-1.5 py-0.5 font-bold rounded">Unity Ad</span>
+          <span>[ Placement: {PLACEMENT_BANNER} ]</span>
+        </div>
+      </div>
+
       {/* BOTTOM NAVIGATION */}
       <div className="fixed bottom-0 w-full max-w-md bg-zinc-950 border-t border-zinc-800 flex justify-around py-2.5 z-40 text-gray-400">
-        <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}>
+        <button onClick={() => { setBottomTab("watch"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}>
           <span className="text-base">📺</span>
           <span>Watch</span>
         </button>
-        <button onClick={() => setBottomTab("campaign")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "campaign" ? "text-red-500" : ""}`}>
+        <button onClick={() => { setBottomTab("campaign"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "campaign" ? "text-red-500" : ""}`}>
           <span className="text-base">🚀</span>
           <span>Campaign</span>
         </button>
-        <button onClick={() => setBottomTab("wallet")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "wallet" ? "text-red-500" : ""}`}>
+        <button onClick={() => { setBottomTab("wallet"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "wallet" ? "text-red-500" : ""}`}>
           <span className="text-base">💼</span>
           <span>Wallet</span>
         </button>
-        <button onClick={() => setBottomTab("refer")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "refer" ? "text-red-500" : ""}`}>
+        <button onClick={() => { setBottomTab("refer"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "refer" ? "text-red-500" : ""}`}>
           <span className="text-base">🎁</span>
           <span>Refer</span>
         </button>
-        <button onClick={() => setBottomTab("profile")} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "profile" ? "text-red-500" : ""}`}>
+        <button onClick={() => { setBottomTab("profile"); triggerSmartInterstitial(); }} className={`flex flex-col items-center text-xs font-bold ${bottomTab === "profile" ? "text-red-500" : ""}`}>
           <span className="text-base">👤</span>
           <span>Profile</span>
         </button>
