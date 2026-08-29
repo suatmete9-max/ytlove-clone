@@ -88,8 +88,7 @@ export default function Home() {
 
   // Action Type Reset on Platform Change
   useEffect(() => {
-    if (platform === "YouTube") setActionType("Views");
-    else setActionType("Followers");
+    setActionType("Views");
   }, [platform]);
 
   // Timer Effect
@@ -186,7 +185,23 @@ export default function Home() {
     }
   };
 
-  // Create Campaign (Direct Add Fund Redirect on Low Balance)
+  // Dynamic Theme Colors
+  const getThemeColor = () => {
+    if (platform === "Facebook") return "bg-[#1877F2] border-[#1877F2] text-white";
+    if (platform === "Instagram") return "bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] border-pink-500 text-white";
+    return "bg-red-600 border-red-500 text-white";
+  };
+
+  const getButtonClass = (p: string) => {
+    if (platform === p) {
+      if (p === "Facebook") return "bg-[#1877F2] text-white border-[#1877F2]";
+      if (p === "Instagram") return "bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white border-pink-500";
+      return "bg-red-600 text-white border-red-500";
+    }
+    return "bg-black border-zinc-800 text-gray-400";
+  };
+
+  // Create Campaign
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     const ratePerItem = actionType === "Subscribers" || actionType === "Followers" ? 120 : 60;
@@ -239,6 +254,8 @@ export default function Home() {
     );
   }
 
+  const referralLink = `https://ytlove-clone.vercel.app/?ref=${user.uid}`;
+
   return (
     <main className="min-h-screen bg-black text-white pb-24 flex flex-col items-center">
       {/* Top Header */}
@@ -257,9 +274,18 @@ export default function Home() {
         {/* WATCH TAB */}
         {activeTab === "watch" && (
           <div className="space-y-4">
+            {/* Unity & AdMob Ad Banner Top */}
+            <div className="bg-zinc-900 border border-zinc-800 p-2 rounded-xl text-center">
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest block mb-1">Sponsored AdMob / Unity Network</span>
+              <div className="bg-zinc-800 h-10 rounded-lg flex items-center justify-center text-xs text-yellow-500 font-bold">
+                📢 Watch Sponsored Ad to Earn Extra Rewards!
+              </div>
+            </div>
+
             <div className="relative w-full h-56 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col items-center justify-center">
               <iframe className="w-full h-full" src={`https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=${isPlaying ? 1 : 0}`} title="Task Player" allow="autoplay"></iframe>
             </div>
+            
             <div className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex justify-between items-center">
               <div><p className="text-xs text-gray-400">Timer</p><p className="text-xl font-bold text-red-500">{timer} Sec</p></div>
               <div><p className="text-xs text-gray-400">Reward</p><p className="text-xl font-bold text-green-500">+60 Coins</p></div>
@@ -280,20 +306,22 @@ export default function Home() {
               <label className="text-xs text-gray-400 block mb-1">Select Platform</label>
               <div className="flex space-x-2">
                 {(["YouTube", "Instagram", "Facebook"] as const).map((p) => (
-                  <button key={p} type="button" onClick={() => setPlatform(p)} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${platform === p ? "bg-red-600 border-red-500" : "bg-black border-zinc-800 text-gray-400"}`}>{p}</button>
+                  <button key={p} type="button" onClick={() => setPlatform(p)} className={`flex-1 py-2 text-xs font-bold rounded-xl border transition-all ${getButtonClass(p)}`}>
+                    {p}
+                  </button>
                 ))}
               </div>
             </div>
 
-            {/* Action Selection */}
+            {/* Category Services - Views Added for All */}
             <div>
               <label className="text-xs text-gray-400 block mb-1">Category Service</label>
               <div className="flex space-x-2">
                 {platform === "YouTube" && (["Views", "Subscribers", "Likes"] as const).map((a) => (
-                  <button key={a} type="button" onClick={() => setActionType(a)} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${actionType === a ? "bg-zinc-800 text-white border-zinc-600" : "bg-black border-zinc-800 text-gray-400"}`}>{a}</button>
+                  <button key={a} type="button" onClick={() => setActionType(a)} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${actionType === a ? "bg-zinc-700 text-white border-zinc-500" : "bg-black border-zinc-800 text-gray-400"}`}>{a}</button>
                 ))}
-                {platform !== "YouTube" && (["Followers", "Likes"] as const).map((a) => (
-                  <button key={a} type="button" onClick={() => setActionType(a)} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${actionType === a ? "bg-zinc-800 text-white border-zinc-600" : "bg-black border-zinc-800 text-gray-400"}`}>{a}</button>
+                {platform !== "YouTube" && (["Views", "Followers", "Likes"] as const).map((a) => (
+                  <button key={a} type="button" onClick={() => setActionType(a)} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${actionType === a ? "bg-zinc-700 text-white border-zinc-500" : "bg-black border-zinc-800 text-gray-400"}`}>{a}</button>
                 ))}
               </div>
             </div>
@@ -313,7 +341,9 @@ export default function Home() {
               <span className="font-bold text-red-500">🪙 {requiredQuantity * (actionType === "Subscribers" || actionType === "Followers" ? 120 : 60)} Coins</span>
             </div>
 
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl">Add Campaign</button>
+            <button type="submit" className={`w-full font-bold py-3 rounded-xl transition ${getThemeColor()}`}>
+              Add {platform} Campaign
+            </button>
           </form>
         )}
 
@@ -341,16 +371,30 @@ export default function Home() {
           </div>
         )}
 
-        {/* REFER TAB */}
+        {/* REFER TAB WITH LIVE USER LINK */}
         {activeTab === "refer" && (
           <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 space-y-4 text-center">
             <div className="w-16 h-16 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center justify-center mx-auto text-2xl">🎁</div>
-            <h2 className="font-bold text-lg">Refer & Earn</h2>
-            <p className="text-xs text-gray-400">Earn ₹10 per successful referral!</p>
+            <div>
+              <h2 className="font-bold text-lg">Refer & Earn Program</h2>
+              <p className="text-xs text-gray-400 mt-1">Earn **₹10** per user when they join using your link!</p>
+            </div>
+            <div className="bg-black p-3 rounded-xl border border-zinc-800 flex items-center justify-between text-xs space-x-2">
+              <span className="truncate text-gray-300 font-mono text-[11px]">{referralLink}</span>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(referralLink);
+                  alert("🎉 Referral link copied to clipboard!");
+                }} 
+                className="bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-white font-bold shrink-0"
+              >
+                Copy Link
+              </button>
+            </div>
           </div>
         )}
 
-        {/* PROFILE & ORDERS STATUS TAB */}
+        {/* PROFILE TAB */}
         {activeTab === "profile" && (
           <div className="space-y-6">
             <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 text-center space-y-3">
@@ -362,7 +406,6 @@ export default function Home() {
               <button onClick={() => signOut(auth)} className="bg-zinc-800 text-red-400 text-xs px-4 py-2 rounded-xl border border-zinc-700 font-bold">Logout</button>
             </div>
 
-            {/* ORDER STATUS HISTORY SECTION */}
             <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 space-y-3">
               <h3 className="font-bold text-sm">📋 My Orders & Transactions</h3>
               {userOrders.length === 0 ? (
