@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, setDoc, query, collection, where, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDbData, increment, query, collection, where, onSnapshot } from "firebase/firestore";
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -14,21 +14,23 @@ export default function Home() {
   const [walletINR, setWalletINR] = useState(0);
   
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
+  const [watchSubTab, setWatchSubTab] = useState<"Views" | "Like" | "Subscribe" | "Follow">("Views");
 
   // Wallet Tabs
   const [walletTab, setWalletTab] = useState<"Add Fund" | "Withdraw">("Add Fund");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("UPI");
 
-  // Modals for VIP and Buy Points
+  // Modals
   const [showVipModal, setShowVipModal] = useState(false);
   const [showBuyPointsModal, setShowBuyPointsModal] = useState(false);
 
-  // Watch State
+  // Watch & Timer State
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isWatching, setIsWatching] = useState(false);
+  const [canClaim, setCanClaim] = useState(false);
 
-  // Campaign State & 3-Color Platform Selector
+  // Campaign State
   const [platform, setPlatform] = useState<"YouTube" | "Facebook" | "Instagram">("YouTube");
   const [actionType, setActionType] = useState<"Views" | "Subscribe" | "Follow" | "Like">("Views");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
@@ -58,8 +60,8 @@ export default function Home() {
         const q = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
         onSnapshot(q, (snapshot) => {
           const ordersData: any[] = [];
-          snapshot.forEach((doc) => ordersData.push({ id: doc.id, ...doc.data() }));
-          setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          snapshot.forEach((docSnap) => ordersData.push({ id: docSnap.id, ...docSnap.data() }));
+          setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
         });
       }
       setLoading(false);
@@ -67,12 +69,36 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  const handleActionRedirect = () => {
-    let url = "https://youtube.com";
-    if (platform === "Facebook") url = "https://facebook.com";
-    if (platform === "Instagram") url = "https://instagram.com";
-    window.open(url, "_blank");
-    setIsPlaying(true);
+  // Timer Effect for Watching Videos
+  useEffect(() => {
+    let interval: any;
+    if (isWatching && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
+    } else if (timer === 0 && isWatching) {
+      setCanClaim(true);
+      setIsWatching(false);
+    }
+    return () => clearInterval(interval);
+  }, [isWatching, timer]);
+
+  const startWatching = () => {
+    setIsWatching(true);
+    setCanClaim(false);
+    setTimer(60);
+    window.open("https://youtube.com", "_blank");
+  };
+
+  const claimReward = async () => {
+    if (!user) return;
+    const newCoins = coins + rewardCoins;
+    setCoins(newCoins);
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(userRef, { coins: newCoins }, { merge: true });
+    alert(`Successfully added +${rewardCoins} ❤️ to your balance!`);
+    setTimer(60);
+    setCanClaim(false);
   };
 
   if (loading) return <main className="min-h-screen bg-black flex items-center justify-center"><p className="text-white">Loading ytLove...</p></main>;
@@ -116,8 +142,16 @@ export default function Home() {
         </div>
       </div>
 
+      {/* LIVE ADS BANNER TOP */}
+      <div className="w-full max-w-md px-4 mt-3">
+        <div className="bg-[#1a1a1a] border border-dashed border-gray-700 p-2 text-center rounded-xl text-[10px] text-gray-400">
+          Advertisement <br />
+          <a href="https://www.profitablecpmrate.com" target="_blank" rel="nofollow" className="text-red-400 underline">Sponsored Ad - Click Here</a>
+        </div>
+      </div>
+
       {/* PROMO BANNER */}
-      <div className="w-full max-w-md px-4 mt-4">
+      <div className="w-full max-w-md px-4 mt-2">
         <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold text-center py-2.5 rounded-xl shadow-lg">
           🎁 First 100 Users get ₹20 Signup Bonus!
         </div>
@@ -126,24 +160,29 @@ export default function Home() {
       {/* SIDEBAR */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 z-50 flex">
-          <div className="w-4/5 max-w-xs bg-[#111111] border-r border-[#222] h-full p-5 shadow-2xl rounded-r-3xl overflow-y-auto">
-            <div className="flex items-center justify-between">
-               <span className="font-bold text-xl">Menu</span>
-               <button onClick={() => setIsSidebarOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
+          <div className="w-4/5 max-w-xs bg-[#111111] border-r border-[#222] h-full p-5 shadow-2xl rounded-r-3xl overflow-y-auto flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                 <span className="font-bold text-xl">Menu</span>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
+              </div>
+              <div className="space-y-2 text-sm font-medium text-gray-300">
+                  <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl">
+                    <span>❤️</span> <span>Buy Points</span>
+                  </button>
+                  <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-amber-400">
+                    <span>👑</span> <span>VIP Member</span>
+                  </button>
+                  <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl">
+                    <span>🎁</span> <span>Refer & Earn (₹10)</span>
+                  </button>
+              </div>
             </div>
-            <div className="mt-8 space-y-2 text-sm font-medium text-gray-300">
-                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl">
-                  <span>❤️</span> <span>Buy Points</span>
-                </button>
-                <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-amber-400">
-                  <span>👑</span> <span>VIP Member</span>
-                </button>
-                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl">
-                  <span>🎁</span> <span>Refer & Earn (₹10)</span>
-                </button>
-                <button onClick={() => signOut(auth)} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-red-500">
-                  <span>🚪</span> <span>Logout</span>
-                </button>
+
+            {/* CONTACT US EMAIL IN SIDEBAR */}
+            <div className="bg-[#1a1a1a] p-3 rounded-2xl border border-[#222] text-center space-y-2">
+              <p className="text-xs text-gray-400">Contact Us Support:</p>
+              <a href="mailto:support.ytlove@gmail.com" className="text-xs text-red-500 font-bold block break-all underline">support.ytlove@gmail.com</a>
             </div>
           </div>
           <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
@@ -153,14 +192,23 @@ export default function Home() {
       {/* MAIN CONTENT AREA */}
       <div className="w-full max-w-md p-4 space-y-4">
 
-        {/* WATCH SECTION WITH 3-COLOR PLATFORM SELECTOR */}
+        {/* WATCH SECTION WITH SUBNAV (VIEWS, LIKE, SUBSCRIBE, FOLLOW) */}
         {bottomTab === "watch" && (
           <div className="space-y-4">
-            {/* 3-Color Platform Selector Bar */}
+            {/* Platform Selector Bar */}
             <div className="grid grid-cols-3 gap-2 bg-[#111111] p-2 rounded-2xl border border-[#222]">
               <button onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "YouTube" ? "bg-red-600 text-white shadow-lg shadow-red-600/30" : "bg-[#222] text-gray-400"}`}>YouTube</button>
               <button onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Facebook" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "bg-[#222] text-gray-400"}`}>Facebook</button>
               <button onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Instagram" ? "bg-pink-600 text-white shadow-lg shadow-pink-600/30" : "bg-[#222] text-gray-400"}`}>Instagram</button>
+            </div>
+
+            {/* Sub-Navigation for Like / Subscribe / Follow / Views */}
+            <div className="grid grid-cols-4 gap-1.5 bg-[#111111] p-1.5 rounded-2xl border border-[#222]">
+              {(["Views", "Like", "Subscribe", "Follow"] as const).map((sub) => (
+                <button key={sub} onClick={() => setWatchSubTab(sub)} className={`py-2 text-[11px] font-bold rounded-xl transition-all ${watchSubTab === sub ? "bg-emerald-600 text-white" : "bg-[#222] text-gray-400"}`}>
+                  {sub}
+                </button>
+              ))}
             </div>
 
             <div className="bg-[#111111] border border-[#222] rounded-3xl p-6 shadow-xl flex flex-col items-center justify-center space-y-6">
@@ -168,7 +216,7 @@ export default function Home() {
                 <img src="https://picsum.photos/300/300" className="w-full h-full object-cover" alt="Campaign" />
               </div>
               
-              <h2 className="font-bold text-lg text-white">{platform} Campaign</h2>
+              <h2 className="font-bold text-lg text-white">{platform} - {watchSubTab}</h2>
 
               <div className="flex justify-center space-x-4 w-full">
                 <div className="flex items-center justify-center space-x-2 bg-[#222] px-6 py-2.5 rounded-2xl w-1/2">
@@ -181,16 +229,22 @@ export default function Home() {
                 </div>
               </div>
 
-              <button onClick={handleActionRedirect} className="w-full bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-3.5 rounded-2xl active:scale-95 transition flex justify-center items-center space-x-2 shadow-lg shadow-green-600/20">
-                <span>▶</span> <span>Go to Link & Earn</span>
-              </button>
+              {!canClaim ? (
+                <button onClick={startWatching} disabled={isWatching} className="w-full bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-3.5 rounded-2xl active:scale-95 transition flex justify-center items-center space-x-2 shadow-lg shadow-green-600/20">
+                  <span>▶</span> <span>{isWatching ? `Watching... (${timer}s)` : "Watch"}</span>
+                </button>
+              ) : (
+                <button onClick={claimReward} className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3.5 rounded-2xl active:scale-95 transition flex justify-center items-center space-x-2 shadow-lg shadow-amber-500/30 animate-pulse">
+                  <span>🎁</span> <span>Claim +{rewardCoins} Points</span>
+                </button>
+              )}
             </div>
           </div>
         )}
 
         {/* CAMPAIGN SECTION */}
         {bottomTab === "campaign" && (
-          <form className="bg-[#111111] border border-[#222] p-6 rounded-3xl shadow-xl space-y-4">
+          <form onSubmit={(e) => { e.preventDefault(); alert("Campaign Added Successfully!"); }} className="bg-[#111111] border border-[#222] p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl ${platform === "YouTube" ? "bg-red-600 text-white" : "bg-[#222] text-gray-400"}`}>YouTube</button>
@@ -198,15 +252,11 @@ export default function Home() {
               <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl ${platform === "Instagram" ? "bg-pink-600 text-white" : "bg-[#222] text-gray-400"}`}>Instagram</button>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {["Views", "Subscribe", "Follow", "Like"].map((act) => {
-                if (platform === "YouTube" && act === "Follow") return null;
-                if ((platform === "Facebook" || platform === "Instagram") && act === "Subscribe") return null;
-                return (
-                  <button key={act} type="button" onClick={() => setActionType(act as any)} className={`py-2 text-[10px] sm:text-xs font-bold rounded-xl ${actionType === act ? "bg-green-600 text-white" : "bg-[#222] text-gray-400"}`}>
-                    {act}
-                  </button>
-                )
-              })}
+              {["Views", "Subscribe", "Follow", "Like"].map((act) => (
+                <button key={act} type="button" onClick={() => setActionType(act as any)} className={`py-2 text-[10px] font-bold rounded-xl ${actionType === act ? "bg-green-600 text-white" : "bg-[#222] text-gray-400"}`}>
+                  {act}
+                </button>
+              ))}
             </div>
             <input type="url" required placeholder="Paste Video/Profile Link here" className="w-full bg-[#222] border border-[#333] rounded-xl p-3 text-sm text-white focus:outline-none focus:border-green-500" />
             <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-[#222] border border-[#333] rounded-xl p-3 text-sm text-white focus:outline-none focus:border-green-500" />
@@ -214,7 +264,7 @@ export default function Home() {
           </form>
         )}
 
-        {/* WALLET SECTION WITH WORKING SUBMIT BUTTONS & ORDER HISTORY */}
+        {/* WALLET SECTION WITH ORDER HISTORY */}
         {bottomTab === "wallet" && (
           <div className="space-y-4">
             <div className="bg-[#111111] border border-[#222] rounded-3xl p-5 space-y-5">
@@ -264,7 +314,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* ORDER HISTORY SECTION */}
+            {/* ORDER HISTORY */}
             <div className="bg-[#111111] border border-[#222] p-5 rounded-3xl space-y-3">
               <h3 className="font-bold text-sm flex items-center space-x-2"><span>📋</span> <span>My Order History</span></h3>
               <div className="space-y-2">
@@ -275,7 +325,7 @@ export default function Home() {
                     <div key={ord.id} className="bg-[#222] p-3 rounded-xl flex justify-between items-center text-xs">
                       <div>
                         <p className="font-bold text-white">{ord.title || "Transaction Request"}</p>
-                        <p className="text-[10px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(ord.createdAt || Date.now()).toLocaleDateString()}</p>
                       </div>
                       <span className="text-yellow-500 font-bold bg-yellow-500/10 px-2 py-1 rounded-md">{ord.status || "Pending"}</span>
                     </div>
@@ -295,7 +345,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* PROFILE SECTION WITH ORDER HISTORY */}
+        {/* PROFILE SECTION WITH WORKING HISTORY */}
         {bottomTab === "profile" && (
           <div className="space-y-4">
              <div className="bg-[#111111] border border-[#222] p-6 rounded-3xl text-center space-y-3">
@@ -303,9 +353,22 @@ export default function Home() {
               <p className="text-xs text-gray-400">{user.email}</p>
               <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs active:scale-95">Logout</button>
             </div>
+            
             <div className="bg-[#111111] border border-[#222] p-5 rounded-3xl space-y-3">
-              <h3 className="font-bold text-sm">📋 Order History</h3>
-              {userOrders.length === 0 ? <p className="text-xs text-gray-500">No history found</p> : userOrders.map(o => <div key={o.id} className="bg-[#222] p-2 rounded text-xs"><span>{o.title}</span></div>)}
+              <h3 className="font-bold text-sm">📋 My Activity & Order History</h3>
+              {userOrders.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-2">No history records found.</p>
+              ) : (
+                userOrders.map((ord) => (
+                  <div key={ord.id} className="bg-[#222] p-3 rounded-xl flex justify-between items-center text-xs">
+                    <div>
+                      <p className="font-bold text-white">{ord.title || "User Campaign/Order"}</p>
+                      <p className="text-[10px] text-gray-400">{new Date(ord.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                    <span className="text-emerald-400 font-bold">{ord.status || "Completed"}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -320,7 +383,7 @@ export default function Home() {
           </div>
           <div className="p-4 space-y-6 max-w-md mx-auto">
             <div className="bg-white rounded-2xl p-4 text-center shadow-sm border border-gray-100">
-              <p className="text-sm text-gray-700">For your questions and support requests, contact us at <strong>info.ytlove@gmail.com.</strong></p>
+              <p className="text-sm text-gray-700">For your questions and support requests, contact us at <a href="mailto:support.ytlove@gmail.com" className="text-red-600 underline font-bold">support.ytlove@gmail.com</a></p>
               <p className="text-sm text-red-600 font-medium mt-2">VIP membership will be activated within 2 minutes.<br/>Please do not close the page during this time.</p>
             </div>
             
@@ -335,29 +398,17 @@ export default function Home() {
               <p>✔ Remove subscription and like counters</p>
               <p>✔ Increase your campaign creation limit</p>
               <p>✔ Increase daily subscription, like and view quotas</p>
-              <p>✔ Increase daily autoplay limit</p>
-              <p>✔ Enjoy many more benefits</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pb-8">
-              <div className="bg-white rounded-2xl p-4 text-center shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-sm font-medium text-gray-800 mb-2">Weekly Vip</p>
-                <div className="w-10 h-10 mb-2 flex items-center justify-center bg-yellow-100 rounded-full border-2 border-yellow-400 text-yellow-500 text-xl">✔</div>
-                <p className="font-medium text-gray-700 mb-4">₹99.00</p>
-                <button onClick={() => alert("VIP Request Initiated!")} className="w-full bg-[#e32021] text-white py-2 rounded-full font-medium active:scale-95">Buy</button>
-              </div>
-              <div className="bg-white rounded-2xl p-4 text-center shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-sm font-medium text-gray-800 mb-2">Monthly Vip</p>
-                <div className="w-10 h-10 mb-2 flex items-center justify-center bg-yellow-100 rounded-full border-2 border-yellow-400 text-yellow-500 text-xl">✔</div>
-                <p className="font-medium text-gray-700 mb-4">₹249.00</p>
-                <button onClick={() => alert("VIP Request Initiated!")} className="w-full bg-[#e32021] text-white py-2 rounded-full font-medium active:scale-95">Buy</button>
-              </div>
-              <div className="bg-white rounded-2xl p-4 text-center shadow-sm border border-gray-100 flex flex-col items-center">
-                <p className="text-sm font-medium text-gray-800 mb-2">Three months Vip</p>
-                <div className="w-10 h-10 mb-2 flex items-center justify-center bg-yellow-100 rounded-full border-2 border-yellow-400 text-yellow-500 text-xl">✔</div>
-                <p className="font-medium text-gray-700 mb-4">₹599.00</p>
-                <button onClick={() => alert("VIP Request Initiated!")} className="w-full bg-[#e32021] text-white py-2 rounded-full font-medium active:scale-95">Buy</button>
-              </div>
+              {["Weekly Vip - ₹99", "Monthly Vip - ₹249", "Three months Vip - ₹599"].map((vip, idx) => (
+                <div key={idx} className="bg-white rounded-2xl p-4 text-center shadow-sm border border-gray-100 flex flex-col items-center">
+                  <p className="text-sm font-medium text-gray-800 mb-2">{vip.split(" - ")[0]}</p>
+                  <div className="w-10 h-10 mb-2 flex items-center justify-center bg-yellow-100 rounded-full border-2 border-yellow-400 text-yellow-500 text-xl">✔</div>
+                  <p className="font-medium text-gray-700 mb-4">{vip.split(" - ")[1]}</p>
+                  <button onClick={() => alert("VIP Activation Request Sent!")} className="w-full bg-[#e32021] text-white py-2 rounded-full font-medium active:scale-95">Buy</button>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -377,8 +428,8 @@ export default function Home() {
           </div>
           <div className="p-4 space-y-6 max-w-md mx-auto">
             <div className="bg-white rounded-3xl p-5 text-center shadow-sm border border-gray-100">
-              <p className="text-sm text-gray-700 mb-1">For your questions and support requests, contact us at <strong>info.ytlove@gmail.com.</strong></p>
-              <p className="text-sm text-[#e32021] font-medium mt-2">Points are reflected within 2 minutes.<br/>Please do not close the page during this time.</p>
+              <p className="text-sm text-gray-700 mb-1">For support, contact us at <a href="mailto:support.ytlove@gmail.com" className="text-red-600 underline font-bold">support.ytlove@gmail.com</a></p>
+              <p className="text-sm text-[#e32021] font-medium mt-2">Points are reflected within 2 minutes.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pb-8">
