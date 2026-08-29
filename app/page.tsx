@@ -45,15 +45,16 @@ export default function Home() {
   const [showAdModal, setShowAdModal] = useState(false);
   const [adTimer, setAdTimer] = useState(5);
 
-  // Deposit/Withdraw Modal
+  // Deposit/Withdraw Modal State
   const [showDepositModal, setShowDepositModal] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
-  const [utrNumber, setUtrNumber] = useState("");
-
+  const [walletTab, setWalletTab] = useState<"Deposit" | "Withdraw">("Deposit");
+  const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("UPI");
+  
   // Orders History State
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
   const UPI_ID = "paytmqr5mq7io@ptys";
+  const CRYPTO_ADDRESS = "TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Yahan apna asil TRC20/USDT address daalein
 
   const triggerSmartInterstitial = () => {
     const nextCount = actionCounter + 1;
@@ -105,6 +106,7 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
+  // Watch Timer Logic
   useEffect(() => {
     let interval: any;
     if (isPlaying && timer > 0) {
@@ -114,6 +116,15 @@ export default function Home() {
     }
     return () => clearInterval(interval);
   }, [isPlaying, timer]);
+
+  // Ad Modal Countdown Logic (FIXED: Ab timer hang nahi hoga)
+  useEffect(() => {
+    let adInterval: any;
+    if (showAdModal && adTimer > 0) {
+      adInterval = setInterval(() => setAdTimer((prev) => prev - 1), 1000);
+    }
+    return () => clearInterval(adInterval);
+  }, [showAdModal, adTimer]);
 
   const handleEarnCoins = async () => {
     setIsPlaying(false);
@@ -247,13 +258,12 @@ export default function Home() {
         </div>
       </div>
 
-      {/* SIDEBAR WITH DAILY BONUS & PROFILE LINK */}
+      {/* SIDEBAR */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex">
           <div className="w-4/5 max-w-xs bg-white text-black h-full p-5 flex flex-col justify-between shadow-2xl rounded-r-3xl overflow-y-auto">
             <div className="space-y-5">
               
-              {/* Working Profile Header Click */}
               <div 
                 onClick={() => { setBottomTab("profile"); setIsSidebarOpen(false); }} 
                 className="flex items-center space-x-3 pt-2 cursor-pointer hover:bg-gray-100 p-2 rounded-2xl transition"
@@ -269,7 +279,6 @@ export default function Home() {
 
               <hr className="border-gray-200" />
 
-              {/* Sidebar Menu Options */}
               <div className="space-y-2 text-sm font-medium text-gray-700">
                 <button onClick={claimDailyBonus} className="w-full flex items-center justify-between p-2.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl font-bold">
                   <span className="flex items-center space-x-2"><span>🎁</span> <span>Daily Login Bonus</span></span>
@@ -361,31 +370,33 @@ export default function Home() {
           <form onSubmit={handleCreateCampaign} className="bg-zinc-900 border border-zinc-800 text-white p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
             
+            {/* Platforms - Green on Select */}
             <div className="grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "YouTube" ? "bg-red-600 border-red-600" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>YouTube</button>
-              <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Facebook" ? "bg-[#1877F2] border-[#1877F2]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Facebook</button>
-              <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl border ${platform === "Instagram" ? "bg-gradient-to-r from-purple-600 to-pink-500 border-pink-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Instagram</button>
+              <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "YouTube" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>YouTube</button>
+              <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "Facebook" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Facebook</button>
+              <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "Instagram" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Instagram</button>
             </div>
 
+            {/* Actions - Green on Select */}
             <div className="grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => setActionType("Views")} className={`py-2 text-xs font-bold rounded-xl border ${actionType === "Views" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Views</button>
+              <button type="button" onClick={() => setActionType("Views")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${actionType === "Views" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Views</button>
               
               {platform === "YouTube" && (
-                <button type="button" onClick={() => setActionType("Subscribe")} className={`py-2 text-xs font-bold rounded-xl border ${actionType === "Subscribe" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Subscribe</button>
+                <button type="button" onClick={() => setActionType("Subscribe")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${actionType === "Subscribe" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Subscribe</button>
               )}
 
               {(platform === "Facebook" || platform === "Instagram") && (
-                <button type="button" onClick={() => setActionType("Follow")} className={`py-2 text-xs font-bold rounded-xl border ${actionType === "Follow" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Follow</button>
+                <button type="button" onClick={() => setActionType("Follow")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${actionType === "Follow" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Follow</button>
               )}
 
-              <button type="button" onClick={() => setActionType("Like")} className={`py-2 text-xs font-bold rounded-xl border ${actionType === "Like" ? "bg-zinc-700 border-zinc-500" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Like</button>
+              <button type="button" onClick={() => setActionType("Like")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${actionType === "Like" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Like</button>
             </div>
 
-            <input type="url" required value={campaignUrl} onChange={(e) => setCampaignUrl(e.target.value)} placeholder={`https://${platform.toLowerCase()}.com/...`} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
+            <input type="url" required value={campaignUrl} onChange={(e) => setCampaignUrl(e.target.value)} placeholder={`https://${platform.toLowerCase()}.com/...`} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none focus:border-green-500 transition-all" />
             
             <div className="space-y-1">
               <label className="text-xs text-gray-400">Target Quantity:</label>
-              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none" />
+              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-sm focus:outline-none focus:border-green-500 transition-all" />
             </div>
 
             <div className="bg-zinc-800/70 p-3 rounded-2xl border border-zinc-700/50 flex justify-between items-center text-xs">
@@ -393,7 +404,7 @@ export default function Home() {
               <span className="font-bold text-amber-400 text-sm">🪙 {calculateRequiredCoins()} Coins</span>
             </div>
 
-            <button type="submit" className="w-full font-bold py-3.5 rounded-xl bg-red-600 text-white active:scale-95 transition">Add Campaign</button>
+            <button type="submit" className="w-full font-bold py-3.5 rounded-xl bg-red-600 hover:bg-red-700 text-white active:scale-95 transition">Add Campaign</button>
           </form>
         )}
 
@@ -409,7 +420,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* WORKING REFER & EARN WITH LINK DISPLAY */}
+        {/* REFER & EARN SECTION */}
         {bottomTab === "refer" && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-4">
             <h2 className="text-lg font-bold">Refer & Earn</h2>
@@ -428,7 +439,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* PROFILE SECTION WITH RESTORED ORDER HISTORY */}
+        {/* PROFILE SECTION */}
         {bottomTab === "profile" && (
           <div className="space-y-4">
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-3">
@@ -440,7 +451,6 @@ export default function Home() {
               <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs">Logout</button>
             </div>
 
-            {/* ORDER HISTORY RESTORED */}
             <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl space-y-3">
               <h3 className="font-bold text-sm">📋 My Orders & Activity</h3>
               {userOrders.length === 0 ? (
@@ -463,7 +473,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* UNITY AD SIMULATOR MODAL (WORKAROUND FOR WEB BROWSER REWARDED ADS) */}
+      {/* UNITY AD SIMULATOR MODAL (FIXED TIMER) */}
       {showAdModal && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4">
           <div className="bg-zinc-900 border border-yellow-500 rounded-3xl p-6 w-full max-w-sm text-center space-y-4 relative shadow-2xl">
@@ -484,19 +494,53 @@ export default function Home() {
         </div>
       )}
 
-      {/* DEPOSIT MODAL */}
+      {/* ADVANCED DEPOSIT/WITHDRAW MODAL (Crypto & UPI) */}
       {showDepositModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative">
-            <button onClick={() => setShowDepositModal(false)} className="absolute top-4 right-4 text-gray-400 font-bold">✕</button>
-            <h3 className="font-bold text-base">Add Funds</h3>
-            <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 flex flex-col items-center space-y-2 text-center">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=paytmqr5mq7io@ptys" className="w-32 h-32 rounded-lg border border-zinc-700" />
-              <p className="text-[11px] font-mono text-gray-400">UPI ID: {UPI_ID}</p>
+          <div className="bg-zinc-900 border border-zinc-800 text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative shadow-2xl">
+            <button onClick={() => setShowDepositModal(false)} className="absolute top-4 right-4 text-gray-400 font-bold bg-zinc-800 w-6 h-6 rounded-full flex items-center justify-center hover:text-white">✕</button>
+            
+            <div className="flex bg-zinc-800 rounded-xl p-1">
+              <button onClick={() => setWalletTab("Deposit")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${walletTab === "Deposit" ? "bg-green-600 text-white" : "text-gray-400"}`}>Deposit</button>
+              <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400"}`}>Withdraw</button>
             </div>
-            <input type="number" placeholder="Amount (INR)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
-            <input type="text" placeholder="Transaction / UTR No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none" />
-            <button onClick={() => { alert("Payment Request Submitted!"); setShowDepositModal(false); }} className="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs">Submit</button>
+
+            {walletTab === "Deposit" ? (
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <button onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "UPI" ? "bg-zinc-700 border-emerald-500 text-emerald-400" : "bg-zinc-800 border-zinc-700"}`}>UPI (INR)</button>
+                  <button onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "Crypto" ? "bg-zinc-700 border-amber-500 text-amber-400" : "bg-zinc-800 border-zinc-700"}`}>Crypto (USDT)</button>
+                </div>
+
+                <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 flex flex-col items-center space-y-3 text-center">
+                  {paymentMethod === "UPI" ? (
+                    <>
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}`} className="w-32 h-32 rounded-lg border-2 border-emerald-500 p-1 bg-white" alt="UPI QR" />
+                      <p className="text-[11px] font-mono text-emerald-400">UPI: {UPI_ID}</p>
+                    </>
+                  ) : (
+                    <>
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_ADDRESS}`} className="w-32 h-32 rounded-lg border-2 border-amber-500 p-1 bg-white" alt="Crypto QR" />
+                      <p className="text-[10px] font-mono text-amber-400 break-all px-2">{CRYPTO_ADDRESS}</p>
+                    </>
+                  )}
+                </div>
+                
+                <input type="number" placeholder={paymentMethod === "UPI" ? "Amount (INR)" : "Amount (USDT)"} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-green-500" />
+                <input type="text" placeholder="Transaction ID / UTR / Hash" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-green-500" />
+                <button onClick={() => { alert("Deposit Request Sent to Admin!"); setShowDepositModal(false); }} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl text-xs transition">Submit Payment</button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-zinc-800 p-3 rounded-xl border border-zinc-700 text-center">
+                  <p className="text-gray-400 text-xs">Available Wallet Balance</p>
+                  <p className="text-green-400 font-bold text-xl">₹{walletINR}</p>
+                </div>
+                <input type="number" placeholder="Withdrawal Amount" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500" />
+                <input type="text" placeholder="Your UPI ID or Crypto Address" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500" />
+                <button onClick={() => { alert("Withdrawal Request Submitted!"); setShowDepositModal(false); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs transition">Request Withdraw</button>
+              </div>
+            )}
           </div>
         </div>
       )}
