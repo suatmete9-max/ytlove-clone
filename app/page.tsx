@@ -27,6 +27,7 @@ export default function Home() {
   const [depositType, setDepositType] = useState<"INR" | "BEP20" | "TRC20">("INR");
   const [utrNumber, setUtrNumber] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
+  const [isSubmittingPay, setIsSubmittingPay] = useState(false);
 
   // Withdraw States
   const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -96,20 +97,61 @@ export default function Home() {
     }
   };
 
-  // Submit UTR / Deposit Verification
+  // Submit UTR with 10-Minute Verification Hold & Duplicate Check
   const handleVerifyDeposit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!utrNumber || !depositAmount) return alert("Please enter Amount and UTR / TxHash");
-
+    const cleanUtr = utrNumber.trim();
     const amt = Number(depositAmount);
+
+    if (!cleanUtr || cleanUtr.length < 8) {
+      return alert("❌ Please enter a valid 12-digit UTR / TxHash Number!");
+    }
+    if (!amt || amt <= 0) {
+      return alert("❌ Please enter a valid deposit amount!");
+    }
+
     if (user) {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, { walletINR: increment(amt) });
-      setWalletINR((prev) => prev + amt);
-      alert(`✅ Deposit Verified Successfully! ₹${amt} credited to your Wallet.`);
-      setShowDepositModal(false);
-      setUtrNumber("");
-      setDepositAmount("");
+      setIsSubmittingPay(true);
+      try {
+        // 1. Duplicate UTR check
+        const utrRef = doc(db, "used_utrs", cleanUtr);
+        const utrSnap = await getDoc(utrRef);
+
+        if (utrSnap.exists()) {
+          setIsSubmittingPay(false);
+          return alert("🚨 This UTR / TxHash number has already been submitted!");
+        }
+
+        // 2. Lock UTR
+        await setDoc(utrRef, {
+          userId: user.uid,
+          email: user.email,
+          amount: amt,
+          type: depositType,
+          createdAt: new Date().toISOString()
+        });
+
+        // 3. Save Deposit Status as Pending with 10-min Notice
+        const depositRef = doc(db, "deposits", `${cleanUtr}_${Date.now()}`);
+        await setDoc(depositRef, {
+          userId: user.uid,
+          email: user.email,
+          utr: cleanUtr,
+          amount: amt,
+          type: depositType,
+          status: "Pending",
+          createdAt: new Date().toISOString()
+        });
+
+        alert("⏱️ Payment Submitted Successfully!\n\nPayment Verification is in progress. Your balance will be credited within 10 minutes after verification.");
+        setShowDepositModal(false);
+        setUtrNumber("");
+        setDepositAmount("");
+      } catch (err) {
+        alert("❌ Error submitting payment verification.");
+      } finally {
+        setIsSubmittingPay(false);
+      }
     }
   };
 
@@ -214,7 +256,6 @@ export default function Home() {
         {activeTab === "watch" && (
           <div className="space-y-4">
             <div className="relative w-full h-56 bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-800 flex flex-col items-center justify-center">
-              {/* Fallback to Unity/AdMob Ads if no active user campaign exists */}
               <iframe 
                 className="w-full h-full" 
                 src={activeCampaigns.length > 0 ? activeCampaigns[0] : `https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=${isPlaying ? 1 : 0}`} 
@@ -313,7 +354,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* DEPOSIT PAYMENT MODAL */}
+      {/* DEPOSIT PAYMENT MODAL WITH 10 MIN NOTICE */}
       {showDepositModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 w-full max-w-sm rounded-2xl p-5 space-y-4 relative">
@@ -352,7 +393,12 @@ export default function Home() {
             <form onSubmit={handleVerifyDeposit} className="space-y-3">
               <input type="number" placeholder="Amount (INR / USDT)" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} required className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-xs focus:outline-none" />
               <input type="text" placeholder="Enter UTR / TxHash No." value={utrNumber} onChange={(e) => setUtrNumber(e.target.value)} required className="w-full bg-black border border-zinc-700 rounded-xl p-3 text-xs focus:outline-none" />
-              <button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl text-xs transition">Submit & Verify Payment</button>
+              
+              <p className="text-[10px] text-yellow-500 text-center font-medium">⏱️ Note: Payment will be verified & credited within 10 minutes.</p>
+
+              <button type="submit" disabled={isSubmittingPay} className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-800 text-white font-bold py-2.5 rounded-xl text-xs transition">
+                {isSubmittingPay ? "Verifying..." : "Submit Payment (10 Min Verification)"}
+              </button>
             </form>
           </div>
         </div>
