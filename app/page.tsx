@@ -49,12 +49,17 @@ export default function Home() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [walletTab, setWalletTab] = useState<"Deposit" | "Withdraw">("Deposit");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("UPI");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositTxId, setDepositTxId] = useState("");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawAddress, setWithdrawAddress] = useState("");
   
   // Orders History State
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
   const UPI_ID = "paytmqr5mq7io@ptys";
-  const CRYPTO_ADDRESS = "TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"; // Yahan apna asil TRC20/USDT address daalein
+  // Binance Smart Chain (BEP20) USDT Address from Screenshot
+  const CRYPTO_BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
 
   const triggerSmartInterstitial = () => {
     const nextCount = actionCounter + 1;
@@ -93,7 +98,7 @@ export default function Home() {
           setCoins(500);
         }
 
-        // Fetch Order History Live
+        // Fetch Order History Live from Firestore
         const q = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
         onSnapshot(q, (snapshot) => {
           const ordersData: any[] = [];
@@ -117,7 +122,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isPlaying, timer]);
 
-  // Ad Modal Countdown Logic (FIXED: Ab timer hang nahi hoga)
+  // Ad Modal Countdown Logic
   useEffect(() => {
     let adInterval: any;
     if (showAdModal && adTimer > 0) {
@@ -201,12 +206,74 @@ export default function Home() {
         url: campaignUrl,
         quantity: requiredQuantity,
         costCoins: totalCost,
-        status: "Active",
+        status: "Pending",
         createdAt: new Date().toISOString()
       });
 
       setCampaignUrl("");
-      alert("🚀 Campaign Created Successfully!");
+      alert("🚀 Campaign Created Successfully & Sent for Review!");
+    }
+  };
+
+  // Submit Deposit Request
+  const handleDepositSubmit = async () => {
+    const amt = Number(depositAmount);
+    if (paymentMethod === "UPI" && amt < 100) {
+      alert("❌ Minimum UPI Deposit is ₹100 INR");
+      return;
+    }
+    if (paymentMethod === "Crypto" && amt < 5) {
+      alert("❌ Minimum Crypto Deposit is $5 USDT");
+      return;
+    }
+    if (!depositTxId) {
+      alert("❌ Please enter Transaction ID / UTR / Hash");
+      return;
+    }
+
+    if (user) {
+      await addDoc(collection(db, "orders"), {
+        userId: user.uid,
+        title: `Deposit ${paymentMethod} (${paymentMethod === "UPI" ? `₹${amt}` : `$${amt} USDT`})`,
+        type: "Deposit",
+        amount: amt,
+        txId: depositTxId,
+        status: "Pending",
+        createdAt: new Date().toISOString()
+      });
+      setDepositAmount("");
+      setDepositTxId("");
+      setShowDepositModal(false);
+      alert("✅ Deposit Request Submitted! Verification takes 10-30 mins.");
+    }
+  };
+
+  // Submit Withdrawal Request
+  const handleWithdrawSubmit = async () => {
+    const amt = Number(withdrawAmount);
+    if (amt <= 0 || amt > walletINR) {
+      alert("❌ Invalid withdrawal amount or insufficient balance.");
+      return;
+    }
+    if (!withdrawAddress) {
+      alert("❌ Please enter your payout UPI ID or BEP20 Address");
+      return;
+    }
+
+    if (user) {
+      await addDoc(collection(db, "orders"), {
+        userId: user.uid,
+        title: `Withdrawal Request (₹${amt})`,
+        type: "Withdrawal",
+        amount: amt,
+        payoutAddress: withdrawAddress,
+        status: "Pending",
+        createdAt: new Date().toISOString()
+      });
+      setWithdrawAmount("");
+      setWithdrawAddress("");
+      setShowDepositModal(false);
+      alert("✅ Withdrawal Request Submitted Successfully!");
     }
   };
 
@@ -370,14 +437,14 @@ export default function Home() {
           <form onSubmit={handleCreateCampaign} className="bg-zinc-900 border border-zinc-800 text-white p-6 rounded-3xl shadow-xl space-y-4">
             <h2 className="text-lg font-bold">Create Campaign</h2>
             
-            {/* Platforms - Green on Select */}
+            {/* Platforms - Active selected is Green */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "YouTube" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>YouTube</button>
               <button type="button" onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "Facebook" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Facebook</button>
               <button type="button" onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${platform === "Instagram" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Instagram</button>
             </div>
 
-            {/* Actions - Green on Select */}
+            {/* Actions - Active selected is Green */}
             <div className="grid grid-cols-3 gap-2">
               <button type="button" onClick={() => setActionType("Views")} className={`py-2 text-xs font-bold rounded-xl border transition-all ${actionType === "Views" ? "bg-green-600 border-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]" : "bg-zinc-800 border-zinc-700 text-gray-400"}`}>Views</button>
               
@@ -416,7 +483,7 @@ export default function Home() {
               <span>Balance:</span>
               <span className="font-bold text-green-400 text-xl">₹{walletINR}</span>
             </div>
-            <button onClick={() => setShowDepositModal(true)} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Add Funds / Buy Coins</button>
+            <button onClick={() => setShowDepositModal(true)} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95 transition">Add Funds / Withdraw</button>
           </div>
         )}
 
@@ -424,7 +491,7 @@ export default function Home() {
         {bottomTab === "refer" && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl text-center space-y-4">
             <h2 className="text-lg font-bold">Refer & Earn</h2>
-            <p className="text-xs text-gray-400">Share your link and earn +500 Coins per Referral!</p>
+            <p className="text-xs text-gray-400">Share your link and earn +10 Coins per Referral!</p>
             
             <div className="bg-zinc-800 p-3 rounded-xl text-xs font-mono break-all text-amber-400 border border-zinc-700">
               {referralLink}
@@ -451,19 +518,27 @@ export default function Home() {
               <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-6 py-2 rounded-xl text-xs">Logout</button>
             </div>
 
+            {/* FULLY FUNCTIONAL ORDERS & ACTIVITY HISTORY */}
             <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl space-y-3">
-              <h3 className="font-bold text-sm">📋 My Orders & Activity</h3>
+              <h3 className="font-bold text-sm">📋 All Orders & Transaction History</h3>
               {userOrders.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-4">No recent orders found.</p>
+                <p className="text-xs text-gray-500 text-center py-4">No recent records found.</p>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {userOrders.map((ord) => (
                     <div key={ord.id} className="bg-zinc-800 p-3 rounded-xl flex justify-between items-center text-xs border border-zinc-700/50">
                       <div>
                         <p className="font-bold text-white">{ord.title}</p>
-                        <p className="text-[10px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(ord.createdAt).toLocaleString()}</p>
                       </div>
-                      <span className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded-full font-bold text-[10px]">{ord.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                        ord.status === "Approved" ? "bg-emerald-950 text-emerald-400" :
+                        ord.status === "Rejected" ? "bg-red-950 text-red-400" :
+                        ord.status === "Cancelled" ? "bg-zinc-700 text-gray-300" :
+                        "bg-amber-950 text-amber-400"
+                      }`}>
+                        {ord.status || "Pending"}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -473,7 +548,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* UNITY AD SIMULATOR MODAL (FIXED TIMER) */}
+      {/* UNITY AD SIMULATOR MODAL */}
       {showAdModal && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-4">
           <div className="bg-zinc-900 border border-yellow-500 rounded-3xl p-6 w-full max-w-sm text-center space-y-4 relative shadow-2xl">
@@ -494,7 +569,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* ADVANCED DEPOSIT/WITHDRAW MODAL (Crypto & UPI) */}
+      {/* ADVANCED DEPOSIT/WITHDRAW MODAL (Min ₹100 INR / $5 USDT BEP20) */}
       {showDepositModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-zinc-900 border border-zinc-800 text-white w-full max-w-sm rounded-3xl p-5 space-y-4 relative shadow-2xl">
@@ -506,39 +581,39 @@ export default function Home() {
             </div>
 
             {walletTab === "Deposit" ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex gap-2">
-                  <button onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "UPI" ? "bg-zinc-700 border-emerald-500 text-emerald-400" : "bg-zinc-800 border-zinc-700"}`}>UPI (INR)</button>
-                  <button onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "Crypto" ? "bg-zinc-700 border-amber-500 text-amber-400" : "bg-zinc-800 border-zinc-700"}`}>Crypto (USDT)</button>
+                  <button onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "UPI" ? "bg-zinc-700 border-emerald-500 text-emerald-400" : "bg-zinc-800 border-zinc-700"}`}>UPI (Min ₹100)</button>
+                  <button onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg border ${paymentMethod === "Crypto" ? "bg-zinc-700 border-amber-500 text-amber-400" : "bg-zinc-800 border-zinc-700"}`}>USDT BEP20 (Min $5)</button>
                 </div>
 
-                <div className="bg-zinc-800 p-4 rounded-xl border border-zinc-700 flex flex-col items-center space-y-3 text-center">
+                <div className="bg-zinc-800 p-3 rounded-xl border border-zinc-700 flex flex-col items-center space-y-2 text-center">
                   {paymentMethod === "UPI" ? (
                     <>
-                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}`} className="w-32 h-32 rounded-lg border-2 border-emerald-500 p-1 bg-white" alt="UPI QR" />
-                      <p className="text-[11px] font-mono text-emerald-400">UPI: {UPI_ID}</p>
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}`} className="w-28 h-28 rounded-lg border-2 border-emerald-500 p-1 bg-white" alt="UPI QR" />
+                      <p className="text-[10px] font-mono text-emerald-400">UPI: {UPI_ID}</p>
                     </>
                   ) : (
                     <>
-                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_ADDRESS}`} className="w-32 h-32 rounded-lg border-2 border-amber-500 p-1 bg-white" alt="Crypto QR" />
-                      <p className="text-[10px] font-mono text-amber-400 break-all px-2">{CRYPTO_ADDRESS}</p>
+                      <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}`} className="w-28 h-28 rounded-lg border-2 border-amber-500 p-1 bg-white" alt="Crypto BEP20 QR" />
+                      <p className="text-[9px] font-mono text-amber-400 break-all px-1">BEP20: {CRYPTO_BEP20_ADDRESS}</p>
                     </>
                   )}
                 </div>
                 
-                <input type="number" placeholder={paymentMethod === "UPI" ? "Amount (INR)" : "Amount (USDT)"} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-green-500" />
-                <input type="text" placeholder="Transaction ID / UTR / Hash" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-green-500" />
-                <button onClick={() => { alert("Deposit Request Sent to Admin!"); setShowDepositModal(false); }} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl text-xs transition">Submit Payment</button>
+                <input type="number" placeholder={paymentMethod === "UPI" ? "Amount in INR (Min 100)" : "Amount in USDT (Min 5)"} value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-green-500" />
+                <input type="text" placeholder="Transaction ID / UTR / Hash" value={depositTxId} onChange={(e) => setDepositTxId(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-green-500" />
+                <button onClick={handleDepositSubmit} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl text-xs transition">Submit Payment</button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="bg-zinc-800 p-3 rounded-xl border border-zinc-700 text-center">
                   <p className="text-gray-400 text-xs">Available Wallet Balance</p>
                   <p className="text-green-400 font-bold text-xl">₹{walletINR}</p>
                 </div>
-                <input type="number" placeholder="Withdrawal Amount" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500" />
-                <input type="text" placeholder="Your UPI ID or Crypto Address" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500" />
-                <button onClick={() => { alert("Withdrawal Request Submitted!"); setShowDepositModal(false); }} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs transition">Request Withdraw</button>
+                <input type="number" placeholder="Withdrawal Amount" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500" />
+                <input type="text" placeholder="Your UPI ID or BEP20 Wallet Address" value={withdrawAddress} onChange={(e) => setWithdrawAddress(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-red-500" />
+                <button onClick={handleWithdrawSubmit} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs transition">Request Withdraw</button>
               </div>
             )}
           </div>
