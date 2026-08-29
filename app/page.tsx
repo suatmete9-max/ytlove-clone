@@ -1,22 +1,34 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { auth, googleProvider } from "@/firebase";
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  // Auto redirect agar user pehle se logged in hai
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.push("/watch");
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
   const handleGoogleLogin = async () => {
     try {
       setLoading(true);
-      await signInWithPopup(auth, googleProvider);
-      router.push("/watch");
-    } catch (error) {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        router.push("/watch");
+      }
+    } catch (error: any) {
       console.error("Login Error:", error);
-      alert("Login failed! Make sure Authorized Domain is added in Firebase.");
+      alert(error.message || "Login failed! Please try again.");
     } finally {
       setLoading(false);
     }
@@ -25,7 +37,6 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm flex flex-col items-center space-y-6 text-center">
-        {/* Logo */}
         <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-600/30">
           <svg className="w-8 h-8 text-white fill-current" viewBox="0 0 24 24">
             <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -39,7 +50,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Google Login Button */}
         <button
           onClick={handleGoogleLogin}
           disabled={loading}
