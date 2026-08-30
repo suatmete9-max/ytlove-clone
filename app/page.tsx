@@ -84,45 +84,45 @@ export default function Home() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
+      try {
+        if (currentUser) {
+          const userRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userRef);
 
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          setCoins(data.coins || 0);
-          setWalletINR(data.walletINR || 0);
-        } else {
-          await setDoc(userRef, { email: currentUser.email, coins: 500, walletINR: 20 });
-          setCoins(500);
-          setWalletINR(20);
-        }
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            setCoins(data.coins || 0);
+            setWalletINR(data.walletINR || 0);
+          } else {
+            await setDoc(userRef, { email: currentUser.email, coins: 500, walletINR: 20 });
+            setCoins(500);
+            setWalletINR(20);
+          }
 
-        const qOrders = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
-        const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-          const ordersData: any[] = [];
-          snapshot.forEach((docSnap) => ordersData.push({ id: docSnap.id, ...docSnap.data() }));
-          setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
-        });
-
-        const qCamp = query(collection(db, "orders"));
-        const unsubCamp = onSnapshot(qCamp, (snapshot) => {
-          const campData: any[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data.status?.includes("Active")) {
-              campData.push({ id: docSnap.id, ...data });
-            }
+          const qOrders = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
+          onSnapshot(qOrders, (snapshot) => {
+            const ordersData: any[] = [];
+            snapshot.forEach((docSnap) => ordersData.push({ id: docSnap.id, ...docSnap.data() }));
+            setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
           });
-          setAllLiveCampaigns(campData);
-        });
 
-        return () => {
-          unsubOrders();
-          unsubCamp();
-        };
+          const qCamp = query(collection(db, "orders"));
+          onSnapshot(qCamp, (snapshot) => {
+            const campData: any[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data.status?.includes("Active")) {
+                campData.push({ id: docSnap.id, ...data });
+              }
+            });
+            setAllLiveCampaigns(campData);
+          });
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false); // Ye ensure karega ki loading kabhi na fase
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -241,7 +241,7 @@ export default function Home() {
     return null;
   };
 
-  if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold">Loading...</p></main>;
+  if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading App...</p></main>;
 
   if (!user) {
     return (
