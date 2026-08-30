@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ytlove</string>
+    <string name="title_activity_main">ytlove</string>
+    <string name="package_name">com.ytlove.app</string>
+    <string name="custom_url_scheme">com.ytlove.app</string>
+</resources>

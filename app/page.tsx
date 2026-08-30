@@ -5,6 +5,12 @@ import { auth, googleProvider, db } from "@/firebase";
 import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot } from "firebase/firestore";
 
+// Unity Ads Constants from Dashboard Screenshot
+const UNITY_GAME_ID = "800364184";
+const PLACEMENT_BANNER = "Banner_Android";
+const PLACEMENT_INTERSTITIAL = "Interstitial_Android";
+const PLACEMENT_REWARDED = "Rewarded_Android";
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -15,27 +21,21 @@ export default function Home() {
   
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
-  // Platform & Dynamic SubTabs
   const [platform, setPlatform] = useState<"YouTube" | "Facebook" | "Instagram">("YouTube");
   const [watchSubTab, setWatchSubTab] = useState<string>("Views");
   const [actionType, setActionType] = useState<string>("Views");
   
-  // Campaign State
   const [campaignLink, setCampaignLink] = useState("");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
   
-  // Orders
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
-  // Wallet Tabs
   const [walletTab, setWalletTab] = useState<"Add Fund" | "Withdraw">("Add Fund");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("UPI");
 
-  // Modals
   const [showVipModal, setShowVipModal] = useState(false);
   const [showBuyPointsModal, setShowBuyPointsModal] = useState(false);
 
-  // Watch & Timer State
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
   const [isWatching, setIsWatching] = useState(false);
@@ -44,18 +44,41 @@ export default function Home() {
   const UPI_ID = "paytmqr5mq7io@ptys";
   const CRYPTO_BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
 
-  // Dynamic Tabs Logic
-  const getTabsForPlatform = (plat: string) => {
-    if (plat === "YouTube") return ["Views", "Like", "Subscribe"];
-    return ["Views", "Like", "Follow"]; // For FB & Insta
+  const availableWatchTabs = platform === "YouTube" ? ["Views", "Like", "Subscribe"] : ["Views", "Like", "Follow"];
+  const availableActionTabs = platform === "YouTube" ? ["Views", "Subscribe", "Like"] : ["Views", "Follow", "Like"];
+
+  // Unity Ads Initialization Logic
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).unityads) {
+      (window as any).unityads.init(UNITY_GAME_ID, false, () => {
+        console.log("Unity Ads Initialized Successfully with Game ID:", UNITY_GAME_ID);
+        showBannerAd();
+      });
+    }
+  }, []);
+
+  const showBannerAd = () => {
+    if (typeof window !== "undefined" && (window as any).unityads) {
+      (window as any).unityads.showBanner(PLACEMENT_BANNER);
+    }
   };
 
-  const handlePlatformChange = (newPlatform: "YouTube" | "Facebook" | "Instagram") => {
-    setPlatform(newPlatform);
-    const validTabs = getTabsForPlatform(newPlatform);
-    if (!validTabs.includes(watchSubTab)) setWatchSubTab("Views");
-    if (!validTabs.includes(actionType)) setActionType("Views");
+  const showRewardedAd = (onComplete: () => void) => {
+    if (typeof window !== "undefined" && (window as any).unityads) {
+      (window as any).unityads.showRewarded(PLACEMENT_REWARDED, () => {
+        onComplete();
+      });
+    } else {
+      onComplete(); // Fallback if Webview/Browser testing
+    }
   };
+
+  useEffect(() => {
+    if (platform === "YouTube" && watchSubTab === "Follow") setWatchSubTab("Views");
+    if (platform !== "YouTube" && watchSubTab === "Subscribe") setWatchSubTab("Views");
+    if (platform === "YouTube" && actionType === "Follow") setActionType("Views");
+    if (platform !== "YouTube" && actionType === "Subscribe") setActionType("Views");
+  }, [platform, watchSubTab, actionType]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -86,11 +109,12 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  // Timer Effect
   useEffect(() => {
     let interval: any;
     if (isWatching && timer > 0) {
-      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
+      interval = setInterval(() => {
+        setTimer((prev) => prev - 1);
+      }, 1000);
     } else if (timer === 0 && isWatching) {
       setCanClaim(true);
       setIsWatching(false);
@@ -102,20 +126,22 @@ export default function Home() {
     setIsWatching(true);
     setCanClaim(false);
     setTimer(60);
-    window.open("https://youtube.com", "_blank");
   };
 
   const claimReward = async () => {
     if (!user) return;
-    const newCoins = coins + rewardCoins;
-    setCoins(newCoins);
-    await setDoc(doc(db, "users", user.uid), { coins: newCoins }, { merge: true });
-    alert(`Successfully added +${rewardCoins} ❤️!`);
-    setTimer(60);
-    setCanClaim(false);
+    
+    showRewardedAd(async () => {
+      const newCoins = coins + rewardCoins;
+      setCoins(newCoins);
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { coins: newCoins }, { merge: true });
+      alert(`Successfully claimed +${rewardCoins} ❤️!`);
+      setTimer(60);
+      setCanClaim(false);
+    });
   };
 
-  // CREATE CAMPAIGN LOGIC (Fixing the History)
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !campaignLink) return;
@@ -127,29 +153,30 @@ export default function Home() {
         actionType,
         link: campaignLink,
         quantity: requiredQuantity,
-        title: `${platform} - ${actionType} Campaign`,
-        status: "Running",
+        title: `${platform} - ${actionType}`,
+        status: "Active",
         createdAt: new Date().toISOString()
       };
       
       await addDoc(collection(db, "orders"), newOrder);
       alert("Campaign Created Successfully!");
       setCampaignLink("");
-      setBottomTab("profile"); // Redirect to history to show it works
+      setRequiredQuantity(10);
+      setBottomTab("profile");
     } catch (error) {
-      alert("Error creating campaign. Check Firestore rules.");
+      alert("Error adding campaign. Make sure Firebase is properly configured.");
     }
   };
 
-  if (loading) return <main className="min-h-screen bg-black flex items-center justify-center"><p className="text-white">Loading ytLove...</p></main>;
+  if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold">Loading ytLove...</p></main>;
 
   if (!user) {
     return (
-      <main className="min-h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-4">
+      <main className="h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm bg-[#111111] border border-[#222] p-6 rounded-3xl text-center space-y-6 shadow-2xl">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto shadow-lg shadow-red-500/30">yt</div>
+          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto">yt</div>
           <h1 className="text-2xl font-bold">ytLove</h1>
-          <button onClick={() => signInWithPopup(auth, googleProvider)} className="w-full bg-white text-black font-semibold py-3.5 rounded-2xl active:scale-95 transition">
+          <button onClick={() => signInWithPopup(auth, googleProvider)} className="w-full bg-white text-black font-bold py-3.5 rounded-xl active:scale-95 transition">
             Continue with Google
           </button>
         </div>
@@ -160,67 +187,107 @@ export default function Home() {
   const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "ytlove.vercel.app"}?ref=${user.uid}`;
 
   return (
-    // FULL SCREEN FIXED LAYOUT (No main page scrolling)
     <main className="h-[100dvh] w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl">
       
-      {/* HEADER (Fixed Top) */}
-      <div className="bg-[#111111] p-4 flex justify-between items-center z-30 border-b border-[#222]">
-        <div className="flex items-center space-x-3">
-          <button onClick={() => setIsSidebarOpen(true)} className="text-xl font-bold text-gray-300 active:scale-90">☰</button>
-          <div className="flex items-center space-x-1.5">
-            <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center text-[10px] font-bold">yt</div>
-            <span className="font-bold text-md">ytLove</span>
-          </div>
+      {/* HEADER */}
+      <div className="bg-[#111111] p-3.5 flex justify-between items-center z-30 border-b border-[#222] shrink-0">
+        <div className="flex items-center space-x-2">
+          <button onClick={() => setIsSidebarOpen(true)} className="text-xl font-bold p-1">☰</button>
+          <div className="w-6 h-6 bg-red-600 rounded flex items-center justify-center text-[10px] font-bold">yt</div>
+          <span className="font-bold text-base">ytLove</span>
         </div>
         <div className="flex items-center space-x-2 text-xs font-bold">
-          <div className="bg-[#222] px-3 py-1.5 rounded-full flex items-center space-x-1">
+          <div className="bg-[#222] px-3 py-1 rounded-full flex items-center space-x-1">
             <span className="text-red-500">❤️</span><span>{coins}</span>
           </div>
-          <div onClick={() => setBottomTab("wallet")} className="bg-emerald-900/40 text-emerald-400 border border-emerald-800 px-3 py-1.5 rounded-full cursor-pointer">
-            ₹{walletINR} <span className="text-[10px]">+</span>
+          <div onClick={() => setBottomTab("wallet")} className="bg-emerald-900/40 text-emerald-400 border border-emerald-800 px-2.5 py-1 rounded-full cursor-pointer flex items-center space-x-1">
+            <span>₹{walletINR}</span><span className="text-[10px] bg-emerald-500 text-black px-1 rounded-full font-bold">+</span>
           </div>
         </div>
       </div>
 
-      {/* SCROLLABLE MIDDLE CONTENT */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24 custom-scrollbar">
+      {/* FIRST 100 USERS BANNER & GIFT ICON */}
+      <div className="bg-gradient-to-r from-amber-600 via-red-600 to-pink-600 px-3 py-1.5 flex justify-between items-center z-20 shrink-0 text-[11px] font-bold">
+        <div className="flex items-center space-x-1.5 truncate">
+          <span>🎉</span>
+          <span className="truncate">First 100 Users Offer: Get Bonus Points on Signup!</span>
+        </div>
+        <button onClick={() => setShowBuyPointsModal(true)} className="bg-black/40 hover:bg-black/60 text-white px-2 py-0.5 rounded-full text-[10px] shrink-0 flex items-center space-x-1 border border-white/20">
+          <span>🎁</span><span>Claim</span>
+        </button>
+      </div>
+
+      {/* SIDEBAR */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex">
+          <div className="w-4/5 max-w-xs bg-[#111111] border-r border-[#222] h-full p-5 shadow-2xl rounded-r-3xl flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                 <span className="font-bold text-xl">Menu</span>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-gray-400 text-xl font-bold">✕</button>
+              </div>
+              <div className="space-y-2 text-sm font-medium text-gray-300">
+                  <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-left">
+                    <span>❤️</span> <span>Buy Points</span>
+                  </button>
+                  <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-amber-400 text-left">
+                    <span>👑</span> <span>VIP Member</span>
+                  </button>
+                  <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full flex items-center space-x-3 p-3 hover:bg-[#222] rounded-xl text-left">
+                    <span>🎁</span> <span>Refer & Earn (₹10)</span>
+                  </button>
+              </div>
+            </div>
+            <div className="bg-[#1a1a1a] p-3 rounded-2xl border border-[#222] text-center space-y-1">
+              <p className="text-[11px] text-gray-400">Support:</p>
+              <a href="mailto:support.ytlove@gmail.com" className="text-xs text-red-500 font-bold block break-all underline">support.ytlove@gmail.com</a>
+            </div>
+          </div>
+          <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
+        </div>
+      )}
+
+      {/* SCROLLABLE MAIN CONTENT */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
 
         {/* WATCH SECTION */}
         {bottomTab === "watch" && (
           <div className="space-y-4">
-            {/* Platform Selector */}
             <div className="grid grid-cols-3 gap-2 bg-[#111111] p-1.5 rounded-2xl border border-[#222]">
-              {(["YouTube", "Facebook", "Instagram"] as const).map((plat) => (
-                <button key={plat} onClick={() => handlePlatformChange(plat)} className={`py-2 text-[11px] font-bold rounded-xl transition-all ${platform === plat ? (plat === "YouTube" ? "bg-red-600 text-white shadow-lg shadow-red-600/30" : plat === "Facebook" ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" : "bg-pink-600 text-white shadow-lg shadow-pink-600/30") : "bg-transparent text-gray-400"}`}>
-                  {plat}
-                </button>
-              ))}
+              <button onClick={() => setPlatform("YouTube")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "YouTube" ? "bg-red-600 text-white shadow-lg" : "text-gray-400"}`}>YouTube</button>
+              <button onClick={() => setPlatform("Facebook")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Facebook" ? "bg-blue-600 text-white shadow-lg" : "text-gray-400"}`}>Facebook</button>
+              <button onClick={() => setPlatform("Instagram")} className={`py-2 text-xs font-bold rounded-xl transition-all ${platform === "Instagram" ? "bg-pink-600 text-white shadow-lg" : "text-gray-400"}`}>Instagram</button>
             </div>
 
-            {/* Dynamic Sub-Navigation (Fixed Logic) */}
-            <div className="flex gap-2 bg-[#111111] p-1.5 rounded-2xl border border-[#222] justify-center">
-              {getTabsForPlatform(platform).map((sub) => (
-                <button key={sub} onClick={() => setWatchSubTab(sub)} className={`flex-1 py-2 text-[11px] font-bold rounded-xl transition-all ${watchSubTab === sub ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20" : "bg-transparent text-gray-400"}`}>
+            <div className="flex gap-2 bg-[#111111] p-1.5 rounded-2xl border border-[#222]">
+              {availableWatchTabs.map((sub) => (
+                <button key={sub} onClick={() => setWatchSubTab(sub)} className={`flex-1 py-2 text-[11px] font-bold rounded-xl ${watchSubTab === sub ? "bg-emerald-600 text-white" : "text-gray-400"}`}>
                   {sub}
                 </button>
               ))}
             </div>
 
-            {/* Main Watch Card */}
             <div className="bg-[#111111] border border-[#222] rounded-3xl p-5 shadow-xl flex flex-col items-center justify-center space-y-5">
               
-              {/* Unity/Video Ad Placeholder instead of Image */}
-              <div className="w-full h-36 bg-black rounded-2xl overflow-hidden border border-[#333] relative flex items-center justify-center group cursor-pointer" onClick={startWatching}>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10 flex flex-col justify-end p-3">
-                   <p className="text-[10px] text-gray-300 font-bold uppercase tracking-wide">Sponsored Ad / Unity</p>
-                </div>
-                <img src="https://picsum.photos/400/200" className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition" alt="Ad" />
-                <div className="absolute z-20 w-12 h-12 bg-red-600 rounded-full flex items-center justify-center shadow-lg shadow-red-600/50">
-                  <span className="text-white ml-1">▶</span>
-                </div>
+              <div className="w-full h-44 bg-black border border-gray-800 rounded-2xl overflow-hidden relative flex items-center justify-center">
+                {platform === "YouTube" && (
+                  <iframe className="w-full h-full" src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0" title="YouTube player" allowFullScreen></iframe>
+                )}
+                {platform === "Facebook" && (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-blue-950/30 p-4 text-center">
+                    <span className="text-3xl mb-2">🔵</span>
+                    <p className="text-xs font-bold text-blue-400">Facebook Video Player</p>
+                  </div>
+                )}
+                {platform === "Instagram" && (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-pink-950/30 p-4 text-center">
+                    <span className="text-3xl mb-2">📸</span>
+                    <p className="text-xs font-bold text-pink-400">Instagram Reel Player</p>
+                  </div>
+                )}
               </div>
               
-              <h2 className="font-bold text-md text-white">{platform} - {watchSubTab}</h2>
+              <h2 className="font-bold text-sm text-white">{platform} - {watchSubTab}</h2>
 
               <div className="flex justify-center space-x-3 w-full">
                 <div className="flex items-center justify-center space-x-1.5 bg-[#222] px-4 py-2 rounded-xl w-1/2 border border-[#333]">
@@ -232,12 +299,12 @@ export default function Home() {
               </div>
 
               {!canClaim ? (
-                <button onClick={startWatching} disabled={isWatching} className="w-full bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-3.5 rounded-2xl active:scale-95 transition shadow-lg shadow-green-600/20 flex items-center justify-center space-x-2">
-                  {isWatching ? <span>Watching... ({timer}s)</span> : <span>Watch Video</span>}
+                <button onClick={startWatching} disabled={isWatching} className="w-full bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-3.5 rounded-2xl active:scale-95 transition flex justify-center items-center space-x-2">
+                  <span>▶</span> <span>{isWatching ? `Watching... (${timer}s)` : "Start Watching"}</span>
                 </button>
               ) : (
-                <button onClick={claimReward} className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3.5 rounded-2xl active:scale-95 transition shadow-lg shadow-amber-500/30 animate-bounce flex items-center justify-center space-x-2">
-                  <span>🎁 Claim +{rewardCoins} Points</span>
+                <button onClick={claimReward} className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3.5 rounded-2xl active:scale-95 transition flex justify-center items-center space-x-2 animate-bounce">
+                  <span>🎁</span> <span>Watch Ad & Claim +{rewardCoins} Points</span>
                 </button>
               )}
             </div>
@@ -246,106 +313,209 @@ export default function Home() {
 
         {/* CAMPAIGN SECTION */}
         {bottomTab === "campaign" && (
-          <form onSubmit={handleCreateCampaign} className="bg-[#111111] border border-[#222] p-6 rounded-3xl shadow-xl space-y-5">
-            <h2 className="text-lg font-bold">Create Campaign</h2>
-            
+          <form onSubmit={handleCreateCampaign} className="bg-[#111111] border border-[#222] p-5 rounded-3xl space-y-4 shadow-xl">
+            <h2 className="text-base font-bold">Create Campaign</h2>
             <div className="grid grid-cols-3 gap-2 bg-[#222] p-1 rounded-xl">
-              {(["YouTube", "Facebook", "Instagram"] as const).map((plat) => (
-                <button key={plat} type="button" onClick={() => handlePlatformChange(plat)} className={`py-2 text-[10px] font-bold rounded-lg ${platform === plat ? "bg-white text-black shadow" : "text-gray-400"}`}>{plat}</button>
-              ))}
+              <button type="button" onClick={() => setPlatform("YouTube")} className={`py-1.5 text-xs font-bold rounded-lg ${platform === "YouTube" ? "bg-red-600 text-white" : "text-gray-400"}`}>YouTube</button>
+              <button type="button" onClick={() => setPlatform("Facebook")} className={`py-1.5 text-xs font-bold rounded-lg ${platform === "Facebook" ? "bg-blue-600 text-white" : "text-gray-400"}`}>Facebook</button>
+              <button type="button" onClick={() => setPlatform("Instagram")} className={`py-1.5 text-xs font-bold rounded-lg ${platform === "Instagram" ? "bg-pink-600 text-white" : "text-gray-400"}`}>Instagram</button>
             </div>
             
             <div className="flex gap-2 bg-[#222] p-1 rounded-xl">
-              {getTabsForPlatform(platform).map((act) => (
-                <button key={act} type="button" onClick={() => setActionType(act)} className={`flex-1 py-2 text-[10px] font-bold rounded-lg ${actionType === act ? "bg-green-500 text-white shadow" : "text-gray-400"}`}>{act}</button>
+              {availableActionTabs.map((act) => (
+                <button key={act} type="button" onClick={() => setActionType(act)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg ${actionType === act ? "bg-green-600 text-white" : "text-gray-400"}`}>
+                  {act}
+                </button>
               ))}
             </div>
-
-            <div className="space-y-3">
-              <input type="url" required value={campaignLink} onChange={(e) => setCampaignLink(e.target.value)} placeholder="Paste Link Here..." className="w-full bg-[#222] border border-[#333] rounded-xl p-3.5 text-sm text-white focus:outline-none focus:border-red-500 transition" />
-              <div className="flex items-center space-x-3 bg-[#222] border border-[#333] p-2 rounded-xl">
-                <span className="text-xs text-gray-400 pl-2">Quantity:</span>
-                <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-transparent p-1.5 text-sm text-white focus:outline-none font-bold" />
-              </div>
+            
+            <input type="url" required value={campaignLink} onChange={(e) => setCampaignLink(e.target.value)} placeholder={`Paste ${platform} Link...`} className="w-full bg-[#222] border border-[#333] rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500" />
+            
+            <div className="flex items-center bg-[#222] border border-[#333] rounded-xl p-3">
+              <span className="text-xs text-gray-400 mr-2">Quantity:</span>
+              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-transparent text-xs text-white focus:outline-none font-bold" />
             </div>
-
-            <button type="submit" className="w-full font-bold py-3.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 transition shadow-lg shadow-red-600/30 text-sm">Add Campaign</button>
+            
+            <button type="submit" className="w-full font-bold py-3 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 transition text-xs">Add Campaign</button>
           </form>
         )}
 
-        {/* WALLET & PROFILE SECTIONS OMITTED FOR BREVITY BUT FULLY FUNCTIONAL AS PREVIOUSLY PROVIDED */}
-        {/* WALLET SECTION WITH ORDER HISTORY */}
+        {/* WALLET SECTION */}
         {bottomTab === "wallet" && (
           <div className="space-y-4">
             <div className="bg-[#111111] border border-[#222] rounded-3xl p-5 space-y-4">
-              <div className="flex bg-[#222] rounded-xl overflow-hidden p-1 gap-1">
-                <button onClick={() => setWalletTab("Add Fund")} className={`flex-1 py-2.5 text-xs font-bold rounded-lg ${walletTab === "Add Fund" ? "bg-green-600 text-white" : "text-gray-400"}`}>Add Fund</button>
-                <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-2.5 text-xs font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400"}`}>Withdraw</button>
+              <div className="flex bg-[#222] rounded-xl p-1 gap-1">
+                <button onClick={() => setWalletTab("Add Fund")} className={`flex-1 py-2 text-xs font-bold rounded-lg ${walletTab === "Add Fund" ? "bg-green-600 text-white" : "text-gray-400"}`}>Add Fund</button>
+                <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-2 text-xs font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400"}`}>Withdraw</button>
               </div>
-              {/* Payment UI remains same */}
-              <p className="text-xs text-gray-500 text-center py-4">UPI & Crypto forms are ready here.</p>
+
+              {walletTab === "Add Fund" ? (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <button onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg border ${paymentMethod === "UPI" ? "bg-[#222] border-emerald-500 text-emerald-400" : "bg-[#111] border-[#333] text-gray-400"}`}>UPI (INR)</button>
+                    <button onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-1.5 text-[11px] font-bold rounded-lg border ${paymentMethod === "Crypto" ? "bg-[#222] border-amber-500 text-amber-400" : "bg-[#111] border-[#333] text-gray-400"}`}>Crypto (USDT)</button>
+                  </div>
+                  
+                  <div className="bg-[#222] p-3 rounded-xl border border-[#333] flex flex-col items-center">
+                    <div className="p-2 bg-white rounded-xl">
+                      <img src={paymentMethod === "Crypto" ? `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${CRYPTO_BEP20_ADDRESS}` : `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=upi://pay?pa=${UPI_ID}`} className="w-28 h-28" alt="QR" />
+                    </div>
+                    <p className="mt-2 text-[10px] font-mono break-all text-center text-emerald-400">
+                      {paymentMethod === "Crypto" ? CRYPTO_BEP20_ADDRESS : UPI_ID}
+                    </p>
+                  </div>
+                  
+                  <input type="number" placeholder="Amount" className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white focus:outline-none" />
+                  <input type="text" placeholder="Transaction UTR / Hash" className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white focus:outline-none" />
+                  <button onClick={() => alert("Submitted successfully!")} className="w-full bg-green-600 font-bold py-3 rounded-xl text-xs active:scale-95">Submit Payment</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="bg-[#222] p-3 rounded-xl text-center">
+                    <p className="text-gray-400 text-xs">Available Balance</p>
+                    <p className="text-green-500 font-bold text-2xl">₹{walletINR}</p>
+                  </div>
+                  <input type="number" placeholder="Amount" className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white focus:outline-none" />
+                  <input type="text" placeholder="UPI ID / Address" className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white focus:outline-none" />
+                  <button onClick={() => alert("Request Submitted!")} className="w-full bg-red-600 font-bold py-3 rounded-xl text-xs active:scale-95">Request Withdrawal</button>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[#111111] border border-[#222] p-4 rounded-3xl space-y-2">
+              <h3 className="font-bold text-xs flex items-center">📋 Order & Transaction History</h3>
+              {userOrders.length === 0 ? (
+                <p className="text-[10px] text-gray-500 text-center py-2">No history records found.</p>
+              ) : (
+                userOrders.map((ord) => (
+                  <div key={ord.id} className="bg-[#222] p-2.5 rounded-xl flex justify-between items-center text-[11px]">
+                    <div>
+                      <p className="font-bold text-white">{ord.title}</p>
+                      <p className="text-[9px] text-gray-400">{new Date(ord.createdAt || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                    <span className="text-amber-400 font-bold">{ord.status || "Pending"}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
 
-        {/* PROFILE SECTION (ACTIVE HISTORY) */}
+        {/* REFER SECTION */}
+        {bottomTab === "refer" && (
+          <div className="bg-[#111111] border border-[#222] p-5 rounded-3xl text-center space-y-4">
+            <h2 className="text-base font-bold">Refer & Earn ₹10</h2>
+            <div className="bg-[#222] p-3 rounded-xl text-xs font-mono break-all text-amber-400 border border-[#333]">{referralLink}</div>
+            <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("Link Copied!"); }} className="w-full bg-green-600 font-bold py-2.5 rounded-xl text-xs active:scale-95">Copy Referral Link</button>
+          </div>
+        )}
+
+        {/* PROFILE SECTION */}
         {bottomTab === "profile" && (
           <div className="space-y-4">
-             <div className="bg-[#111111] border border-[#222] p-6 rounded-3xl text-center space-y-3">
-              <div className="w-16 h-16 mx-auto bg-gray-700 rounded-full flex items-center justify-center text-xl shadow-inner mb-2">👤</div>
-              <h2 className="font-bold text-lg">{user.displayName || "User"}</h2>
+            <div className="bg-[#111111] border border-[#222] p-5 rounded-3xl text-center space-y-3">
+              <h2 className="font-bold text-base">{user.displayName || "User Profile"}</h2>
               <p className="text-xs text-gray-400">{user.email}</p>
-              <button onClick={() => signOut(auth)} className="mt-2 bg-[#222] border border-[#333] hover:bg-red-600 hover:border-red-600 text-white font-bold px-8 py-2.5 rounded-xl text-xs active:scale-95 transition">Logout</button>
+              <button onClick={() => signOut(auth)} className="bg-red-600 text-white font-bold px-5 py-2 rounded-xl text-xs active:scale-95">Logout</button>
             </div>
             
-            {/* WORKING ORDER HISTORY */}
-            <div className="bg-[#111111] border border-[#222] p-5 rounded-3xl space-y-3">
-              <h3 className="font-bold text-sm flex items-center"><span className="mr-2">📋</span> My Campaigns & Orders</h3>
-              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {userOrders.length === 0 ? (
-                  <p className="text-xs text-gray-500 text-center py-4 bg-[#222] rounded-xl">No history records found.</p>
-                ) : (
-                  userOrders.map((ord) => (
-                    <div key={ord.id} className="bg-[#222] p-3.5 rounded-xl flex justify-between items-center text-xs border border-[#333]">
-                      <div>
-                        <p className="font-bold text-white mb-0.5">{ord.title}</p>
-                        <p className="text-[10px] text-gray-400">Qty: {ord.quantity} • {new Date(ord.createdAt).toLocaleDateString()}</p>
-                      </div>
-                      <span className="text-emerald-400 font-bold bg-emerald-400/10 px-2 py-1 rounded-md">{ord.status}</span>
+            <div className="bg-[#111111] border border-[#222] p-4 rounded-3xl space-y-2">
+              <h3 className="font-bold text-xs">📋 My Active Campaigns</h3>
+              {userOrders.length === 0 ? (
+                <p className="text-[10px] text-gray-500 text-center py-2">No active campaigns.</p>
+              ) : (
+                userOrders.map((ord) => (
+                  <div key={ord.id} className="bg-[#222] p-2.5 rounded-xl flex justify-between items-center text-[11px]">
+                    <div>
+                      <p className="font-bold text-white">{ord.title}</p>
+                      <p className="text-[9px] text-gray-400">Qty: {ord.quantity} | {new Date(ord.createdAt || Date.now()).toLocaleDateString()}</p>
                     </div>
-                  ))
-                )}
-              </div>
+                    <span className="text-emerald-400 font-bold">{ord.status || "Active"}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
 
-      </div> {/* End Scrollable Middle Content */}
+        {/* FOOTER */}
+        <footer className="pt-6 pb-2 text-center text-xs text-gray-600">
+          <p>© {new Date().getFullYear()} Notion API Engine. All rights reserved.</p>
+          <div className="flex justify-center gap-4 mt-2">
+            <a href="#" className="hover:text-gray-400 transition">Privacy Policy</a>
+            <a href="#" className="hover:text-gray-400 transition">Terms of Service</a>
+            <a href="#" className="hover:text-gray-400 transition">Contact Support</a>
+          </div>
+        </footer>
 
-      {/* FIXED BOTTOM AD BANNER (Just above Nav) */}
-      <div className="absolute bottom-[65px] left-0 w-full bg-[#1a1a1a] border-t border-[#333] flex justify-center items-center py-1.5 z-40 shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
-         {/* Live Ad Script Area */}
-         <div className="text-center w-full">
-            <span className="text-[9px] text-gray-500 uppercase tracking-wider mb-0.5 block">Advertisement</span>
-            <div className="w-[320px] h-[50px] mx-auto bg-black/50 border border-gray-700/50 rounded flex items-center justify-center cursor-pointer hover:border-red-500 transition">
-              <p className="text-xs text-gray-400">Google / Adsterra Banner</p>
-            </div>
-         </div>
       </div>
 
-      {/* FIXED BOTTOM NAV */}
-      <div className="absolute bottom-0 left-0 w-full bg-[#111111] border-t border-[#222] flex justify-around py-2.5 z-50 text-gray-400 pb-safe">
-        <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-[10px] font-bold transition-colors ${bottomTab === "watch" ? "text-red-500" : "hover:text-gray-200"}`}>
-          <span className="text-xl mb-0.5">📺</span>Watch
+      {/* MODALS */}
+      {showVipModal && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto text-black p-4 space-y-4">
+          <div className="flex items-center space-x-3 border-b pb-3">
+            <button onClick={() => setShowVipModal(false)} className="text-xl font-bold">←</button>
+            <h1 className="text-base font-bold">VIP Membership</h1>
+          </div>
+          <div className="space-y-2 text-xs">
+            <p className="text-red-600 font-bold">VIP membership activates within 2 minutes.</p>
+            <p>✔ Remove ads</p>
+            <p>✔ 10% discount on campaigns</p>
+            <p>✔ Higher daily limits</p>
+          </div>
+          <div className="space-y-2">
+            {["Weekly Vip - ₹99", "Monthly Vip - ₹249", "3 Months Vip - ₹599"].map((vip, i) => (
+              <div key={i} className="border p-3 rounded-xl flex justify-between items-center">
+                <span className="text-xs font-bold">{vip}</span>
+                <button onClick={() => alert("VIP Request Sent")} className="bg-red-600 text-white text-xs px-3 py-1 rounded-lg">Buy</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showBuyPointsModal && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto text-black p-4 space-y-4">
+          <div className="flex items-center justify-between border-b pb-3">
+            <button onClick={() => setShowBuyPointsModal(false)} className="text-xl font-bold">←</button>
+            <h1 className="text-base font-bold">Buy Points</h1>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[{ p: "3,000 Pts", pr: "₹19.99" }, { p: "10,000 Pts", pr: "₹50.00" }, { p: "50,000 Pts", pr: "₹250.00" }].map((pack, i) => (
+              <div key={i} className="border p-3 rounded-xl text-center space-y-2">
+                <p className="text-xs font-bold">{pack.p}</p>
+                <p className="text-xs text-gray-600">{pack.pr}</p>
+                <button onClick={() => alert("Order Placed")} className="bg-red-600 text-white text-xs px-3 py-1 rounded-lg w-full">Buy</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* FIXED UNITY BANNER AD AT BOTTOM */}
+      <div className="w-full bg-[#1a1a1a] border-t border-[#333] p-1 text-center absolute bottom-[58px] left-0 right-0 z-30">
+        <p className="text-[8px] text-gray-500 uppercase font-bold">Unity Banner Ad (ID: Banner_Android)</p>
+        <div id="unity-banner-container" className="w-full h-10 bg-black/50 border border-gray-700/50 rounded flex items-center justify-center">
+          <span className="text-[10px] text-gray-400">Unity Banner Slot Connected</span>
+        </div>
+      </div>
+
+      {/* FIXED NAVIGATION BAR */}
+      <div className="absolute bottom-0 left-0 right-0 bg-[#111111] border-t border-[#222] flex justify-around py-2.5 z-40 text-gray-400">
+        <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-[10px] font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}>
+          <span className="text-lg">📺</span><span>Watch</span>
         </button>
-        <button onClick={() => setBottomTab("campaign")} className={`flex flex-col items-center text-[10px] font-bold transition-colors ${bottomTab === "campaign" ? "text-red-500" : "hover:text-gray-200"}`}>
-          <span className="text-xl mb-0.5">🚀</span>Campaign
+        <button onClick={() => setBottomTab("campaign")} className={`flex flex-col items-center text-[10px] font-bold ${bottomTab === "campaign" ? "text-red-500" : ""}`}>
+          <span className="text-lg">🚀</span><span>Campaign</span>
         </button>
-        <button onClick={() => setBottomTab("wallet")} className={`flex flex-col items-center text-[10px] font-bold transition-colors ${bottomTab === "wallet" ? "text-red-500" : "hover:text-gray-200"}`}>
-          <span className="text-xl mb-0.5">💼</span>Wallet
+        <button onClick={() => setBottomTab("wallet")} className={`flex flex-col items-center text-[10px] font-bold ${bottomTab === "wallet" ? "text-red-500" : ""}`}>
+          <span className="text-lg">💼</span><span>Wallet</span>
         </button>
-        <button onClick={() => setBottomTab("profile")} className={`flex flex-col items-center text-[10px] font-bold transition-colors ${bottomTab === "profile" ? "text-red-500" : "hover:text-gray-200"}`}>
-          <span className="text-xl mb-0.5">👤</span>Profile
+        <button onClick={() => setBottomTab("refer")} className={`flex flex-col items-center text-[10px] font-bold ${bottomTab === "refer" ? "text-red-500" : ""}`}>
+          <span className="text-lg">🎁</span><span>Refer</span>
+        </button>
+        <button onClick={() => setBottomTab("profile")} className={`flex flex-col items-center text-[10px] font-bold ${bottomTab === "profile" ? "text-red-500" : ""}`}>
+          <span className="text-lg">👤</span><span>Profile</span>
         </button>
       </div>
 
