@@ -134,13 +134,13 @@ export default function Home() {
     } else if (timer === 0 && isWatching) {
       setCanClaim(true);
       setIsWatching(false);
+      autoClaimReward();
     }
     return () => clearInterval(interval);
   }, [isWatching, timer]);
 
   const startWatching = (link: string) => {
     if (!link) return;
-    // Video/Link click krne par naye tab me open hoga aur app ka timer chalega
     window.open(link, "_blank");
     setIsWatching(true);
     setCanClaim(false);
@@ -156,7 +156,7 @@ export default function Home() {
     }
   };
 
-  const claimReward = async () => {
+  const autoClaimReward = async () => {
     if (!user) return;
     
     setClickCount((prev) => {
@@ -173,7 +173,6 @@ export default function Home() {
       setCoins(newCoins);
       const userRef = doc(db, "users", user.uid);
       await setDoc(userRef, { coins: newCoins }, { merge: true });
-      alert(`Successfully claimed +${rewardCoins} ❤️!`);
       handleSkipCampaign();
     });
   };
@@ -248,10 +247,9 @@ export default function Home() {
 
   const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "ytlove.vercel.app"}?ref=${user.uid}`;
 
-  // Platform ke mutabiq buttons filter karne ka logic
   const getAvailableCategories = () => {
-    if (platform === "YouTube") return ["Views", "Like", "Subscribe"]; // YT se Follow remove kar diya
-    return ["Views", "Like", "Follow"]; // FB & Insta se Subscribe remove kar diya
+    if (platform === "YouTube") return ["Views", "Like", "Subscribe"];
+    return ["Views", "Like", "Follow"];
   };
 
   const filteredCampaigns = allLiveCampaigns.filter(c => c.platform === platform && c.actionType === watchCategory);
@@ -322,7 +320,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className={`grid grid-cols-3 gap-1 bg-[#111] p-1 rounded-xl border border-[#222]`}>
+            <div className="grid grid-cols-3 gap-1 bg-[#111] p-1 rounded-xl border border-[#222]">
               {getAvailableCategories().map((cat: any) => (
                 <button key={cat} onClick={() => { setWatchCategory(cat); setCurrentCampaignIndex(0); }} className={`py-1.5 text-[10px] font-bold rounded-lg ${watchCategory === cat ? "bg-emerald-600 text-white" : "text-gray-400"}`}>
                   {cat}
@@ -330,38 +328,45 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-xl flex flex-col items-center space-y-3">
-              <div className="w-full h-36 bg-black border border-gray-800 rounded-xl flex items-center justify-center p-3 text-center">
+            {/* VIDEO CARD */}
+            <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden shadow-xl flex flex-col">
+              <div className="w-full h-44 bg-black relative flex items-center justify-center">
                 {activeCampaignToShow ? (
-                  <div>
-                    <p className="text-[10px] text-emerald-400 font-bold mb-1">Live {activeCampaignToShow.actionType} Campaign</p>
-                    <p className="text-xs text-blue-400 underline break-all line-clamp-2">{activeCampaignToShow.link}</p>
-                    <p className="text-[9px] text-gray-500 mt-2">Clicking 'Start Watching' will open app & run timer.</p>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-gradient-to-t from-black via-black/50 to-transparent text-center">
+                    <button onClick={() => startWatching(activeCampaignToShow?.link)} className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center text-white text-xl shadow-lg mb-2 hover:scale-105 transition">
+                      ▶
+                    </button>
+                    <a href={activeCampaignToShow?.link} target="_blank" rel="noopener noreferrer" className="text-xs text-white font-medium underline">
+                      Watch on {platform}
+                    </a>
                   </div>
                 ) : (
                   <p className="text-xs text-gray-500">No live campaigns found for {platform} - {watchCategory}</p>
                 )}
               </div>
               
-              <div className="flex justify-between w-full text-xs">
-                <span className="text-red-500 font-bold">❤️ Reward: {rewardCoins}</span>
-                <span className="text-gray-300 font-bold">⏱️ Timer: {timer}s</span>
+              <div className="p-3 flex justify-around items-center border-t border-[#222]">
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-red-500 text-lg">❤️</span>
+                  <div>
+                    <p className="text-sm font-bold">{rewardCoins}</p>
+                    <p className="text-[9px] text-gray-400">Points</p>
+                  </div>
+                </div>
+                <div className="h-6 w-[1px] bg-[#333]"></div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-gray-300 text-lg">⏱️</span>
+                  <div>
+                    <p className="text-sm font-bold">{timer}</p>
+                    <p className="text-[9px] text-gray-400">Seconds</p>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex gap-2 w-full">
-                <button onClick={handleSkipCampaign} className="w-1/3 bg-[#333] hover:bg-[#444] text-white font-bold py-2.5 rounded-xl text-xs">
-                  ⏭️ Change
+              <div className="p-3 bg-[#161616]">
+                <button onClick={handleSkipCampaign} className="w-full bg-[#222] hover:bg-[#333] text-white font-bold py-2.5 rounded-xl text-xs">
+                  Change
                 </button>
-
-                {!canClaim ? (
-                  <button onClick={() => startWatching(activeCampaignToShow?.link)} disabled={isWatching || !activeCampaignToShow} className="w-2/3 bg-[#1db954] text-white font-bold py-2.5 rounded-xl text-xs">
-                    {isWatching ? `Timer Running (${timer}s)` : "Start Watching"}
-                  </button>
-                ) : (
-                  <button onClick={claimReward} className="w-2/3 bg-amber-500 text-black font-bold py-2.5 rounded-xl text-xs animate-bounce">
-                    🎁 Claim +{rewardCoins}
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -430,12 +435,27 @@ export default function Home() {
             </div>
             <div className="bg-[#111] p-3 rounded-2xl space-y-2">
               <h3 className="font-bold text-[11px]">Order History</h3>
-              {userOrders.map((ord) => (
-                <div key={ord.id} className="bg-[#222] p-2 rounded-xl flex justify-between text-[10px]">
-                  <span>{ord.title}</span>
-                  <span className="text-emerald-400 font-bold">{ord.status}</span>
-                </div>
-              ))}
+              {userOrders.map((ord) => {
+                const statusText = ord.status || "";
+                const isPending = statusText.toLowerCase().includes("pending") || statusText.toLowerCase().includes("processing");
+                const isLive = statusText.toLowerCase().includes("active");
+                const isRejected = statusText.toLowerCase().includes("reject") || statusText.toLowerCase().includes("cancel");
+
+                const statusColorClass = isPending 
+                  ? "text-blue-400" 
+                  : isLive 
+                  ? "text-emerald-400" 
+                  : isRejected 
+                  ? "text-red-500" 
+                  : "text-gray-400";
+
+                return (
+                  <div key={ord.id} className="bg-[#222] p-2 rounded-xl flex justify-between text-[10px] items-center">
+                    <span>{ord.title}</span>
+                    <span className={`font-bold ${statusColorClass}`}>{ord.status}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
