@@ -238,7 +238,7 @@ export default function Home() {
       const match = url.match(regExp);
       return (match && match[2].length === 11) ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
     }
-    return null; // For FB / Insta, fallback will handle cleanly
+    return null;
   };
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold">Loading...</p></main>;
@@ -262,8 +262,8 @@ export default function Home() {
     return ["Views", "Like", "Follow"];
   };
 
-  const filteredCampaigns = allLiveCampaigns.filter(c => c.platform === platform && c.actionType === watchCategory);
-  const activeCampaignToShow = filteredCampaigns[currentCampaignIndex % (filteredCampaigns.length || 1)];
+  const filteredCampaigns = allLiveCampaigns.filter(c => (c.platform || "YouTube") === platform && (c.actionType || "Views") === watchCategory);
+  const activeCampaignToShow = filteredCampaigns.length > 0 ? filteredCampaigns[currentCampaignIndex % filteredCampaigns.length] : null;
   const mediaThumbnail = activeCampaignToShow ? getMediaThumbnail(activeCampaignToShow.link, activeCampaignToShow.platform || platform) : null;
 
   return (
@@ -363,7 +363,7 @@ export default function Home() {
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-gray-500">No live campaigns found for {platform} - {watchCategory}</p>
+                  <p className="text-xs text-gray-500 text-center p-4">No live campaigns found for {platform} - {watchCategory}</p>
                 )}
               </div>
               
