@@ -231,12 +231,14 @@ export default function Home() {
     setWithdrawAmount(""); setWithdrawAccount("");
   };
 
-  // Helper to extract YouTube Thumbnail
-  const getYouTubeThumbnail = (url: string) => {
+  const getMediaThumbnail = (url: string, plat: string) => {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    return (match && match[2].length === 11) ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
+    if (plat === "YouTube") {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
+    }
+    return null; // For FB / Insta, fallback will handle cleanly
   };
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold">Loading...</p></main>;
@@ -262,7 +264,7 @@ export default function Home() {
 
   const filteredCampaigns = allLiveCampaigns.filter(c => c.platform === platform && c.actionType === watchCategory);
   const activeCampaignToShow = filteredCampaigns[currentCampaignIndex % (filteredCampaigns.length || 1)];
-  const videoThumbnail = activeCampaignToShow ? getYouTubeThumbnail(activeCampaignToShow.link) : null;
+  const mediaThumbnail = activeCampaignToShow ? getMediaThumbnail(activeCampaignToShow.link, activeCampaignToShow.platform || platform) : null;
 
   return (
     <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl">
@@ -337,22 +339,26 @@ export default function Home() {
               ))}
             </div>
 
-            {/* VIDEO CARD WITH THUMBNAIL PREVIEW */}
+            {/* MEDIA PREVIEW CARD */}
             <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden shadow-xl flex flex-col">
               <div className="w-full h-48 bg-black relative flex items-center justify-center overflow-hidden">
                 {activeCampaignToShow ? (
                   <>
-                    {videoThumbnail ? (
-                      <img src={videoThumbnail} alt="Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-60" />
+                    {mediaThumbnail ? (
+                      <img src={mediaThumbnail} alt="Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-60" />
                     ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-gray-900 to-black"></div>
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-purple-950 to-black flex items-center justify-center">
+                        <span className="text-4xl">
+                          {activeCampaignToShow.platform === "Facebook" ? "📘" : activeCampaignToShow.platform === "Instagram" ? "📸" : "▶️"}
+                        </span>
+                      </div>
                     )}
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-black/40 text-center">
                       <button onClick={() => startWatching(activeCampaignToShow?.link)} className="w-14 h-14 bg-red-600 rounded-full flex items-center justify-center text-white text-xl shadow-lg mb-2 hover:scale-105 transition">
                         ▶
                       </button>
                       <a href={activeCampaignToShow?.link} target="_blank" rel="noopener noreferrer" className="text-xs text-white font-bold underline bg-black/60 px-2 py-1 rounded-lg">
-                        Watch on {platform}
+                        Open & View on {activeCampaignToShow.platform || platform}
                       </a>
                     </div>
                   </>
@@ -410,7 +416,7 @@ export default function Home() {
           </form>
         )}
 
-        {/* WALLET SECTION WITH QR CODE & CRYPTO */}
+        {/* WALLET SECTION */}
         {bottomTab === "wallet" && (
           <div className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3">
             <div className="flex bg-[#222] rounded-xl p-1 gap-1">
@@ -420,18 +426,16 @@ export default function Home() {
             
             {walletTab === "Add Fund" ? (
               <div className="space-y-3">
-                {/* Payment Method Switcher */}
                 <div className="flex gap-2">
                   <button type="button" onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "UPI" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>🇮🇳 UPI (INR)</button>
                   <button type="button" onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "Crypto" ? "bg-amber-600 border-amber-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>🌐 Crypto (USDT)</button>
                 </div>
 
-                {/* QR Code & Details */}
                 <div className="bg-[#181818] p-3 rounded-2xl border border-[#2a2a2a] text-center space-y-2">
                   {paymentMethod === "UPI" ? (
                     <>
                       <div className="w-32 h-32 bg-white mx-auto p-2 rounded-xl flex items-center justify-center">
-                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}&pn=ytLove`} alt="UPI QR Code" className="w-full h-full object-contain" />
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}&pn=ytLove`} alt="UPI QR" className="w-full h-full object-contain" />
                       </div>
                       <p className="text-[10px] text-gray-400">Scan via GPay / PhonePe / Paytm</p>
                       <p className="text-xs font-mono font-bold text-emerald-400 select-all">{UPI_ID}</p>
@@ -439,7 +443,7 @@ export default function Home() {
                   ) : (
                     <>
                       <div className="w-32 h-32 bg-white mx-auto p-2 rounded-xl flex items-center justify-center">
-                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}`} alt="Crypto QR Code" className="w-full h-full object-contain" />
+                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}`} alt="Crypto QR" className="w-full h-full object-contain" />
                       </div>
                       <p className="text-[10px] text-gray-400">BEP20 Network Only (USDT/BNB)</p>
                       <p className="text-[10px] font-mono font-bold text-amber-400 break-all select-all">{CRYPTO_BEP20_ADDRESS}</p>
