@@ -22,13 +22,15 @@ export default function Home() {
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
   const [platform, setPlatform] = useState<"YouTube" | "Facebook" | "Instagram">("YouTube");
-  const [watchSubTab, setWatchSubTab] = useState<string>("Views");
+  const [watchCategory, setWatchCategory] = useState<"Views" | "Like" | "Subscribe" | "Follow">("Views");
   const [actionType, setActionType] = useState<string>("Views");
   
   const [campaignLink, setCampaignLink] = useState("");
   const [requiredQuantity, setRequiredQuantity] = useState(10);
   
   const [userOrders, setUserOrders] = useState<any[]>([]);
+  const [allLiveCampaigns, setAllLiveCampaigns] = useState<any[]>([]);
+  const [currentCampaignIndex, setCurrentCampaignIndex] = useState(0);
 
   const [walletTab, setWalletTab] = useState<"Add Fund" | "Withdraw">("Add Fund");
   const [paymentMethod, setPaymentMethod] = useState<"UPI" | "Crypto">("UPI");
@@ -50,9 +52,6 @@ export default function Home() {
   const UPI_ID = "paytmqr5mq7io@ptys";
   const CRYPTO_BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
 
-  const availableWatchTabs = platform === "YouTube" ? ["Views", "Like", "Subscribe"] : ["Views", "Like", "Follow"];
-  const availableActionTabs = platform === "YouTube" ? ["Views", "Subscribe", "Like"] : ["Views", "Follow", "Like"];
-
   // Unity Ads Initialization Logic
   useEffect(() => {
     if (typeof window !== "undefined" && (window as any).unityads) {
@@ -65,46 +64,27 @@ export default function Home() {
 
   const showBannerAd = () => {
     if (typeof window !== "undefined" && (window as any).unityads) {
-      try {
-        (window as any).unityads.showBanner(PLACEMENT_BANNER);
-      } catch (e) {
-        console.log("Banner error:", e);
-      }
+      try { (window as any).unityads.showBanner(PLACEMENT_BANNER); } catch (e) {}
     }
   };
 
   const showInterstitialAd = () => {
     if (typeof window !== "undefined" && (window as any).unityads) {
-      try {
-        (window as any).unityads.showInterstitial(PLACEMENT_INTERSTITIAL);
-      } catch (e) {
-        console.log("Interstitial error:", e);
-      }
+      try { (window as any).unityads.showInterstitial(PLACEMENT_INTERSTITIAL); } catch (e) {}
     }
   };
 
   const showRewardedAd = (onComplete: () => void) => {
     if (typeof window !== "undefined" && (window as any).unityads) {
       try {
-        (window as any).unityads.showRewarded(PLACEMENT_REWARDED, () => {
-          onComplete();
-        });
-      } catch (e) {
-        onComplete();
-      }
+        (window as any).unityads.showRewarded(PLACEMENT_REWARDED, () => { onComplete(); });
+      } catch (e) { onComplete(); }
     } else {
       onComplete(); 
     }
   };
 
-  useEffect(() => {
-    if (platform === "YouTube" && watchSubTab === "Follow") setWatchSubTab("Views");
-    if (platform !== "YouTube" && watchSubTab === "Subscribe") setWatchSubTab("Views");
-    if (platform === "YouTube" && actionType === "Follow") setActionType("Views");
-    if (platform !== "YouTube" && actionType === "Subscribe") setActionType("Views");
-  }, [platform, watchSubTab, actionType]);
-
-  // Fixed Auth & Realtime Orders Sync (Order History Fix)
+  // Fixed Auth & Realtime Orders & Live Campaigns Sync
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -122,16 +102,31 @@ export default function Home() {
           setWalletINR(20);
         }
 
-        const q = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
-        const unsubOrders = onSnapshot(q, (snapshot) => {
+        // Fetch User Orders
+        const qOrders = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
+        const unsubOrders = onSnapshot(qOrders, (snapshot) => {
           const ordersData: any[] = [];
           snapshot.forEach((docSnap) => ordersData.push({ id: docSnap.id, ...docSnap.data() }));
           setUserOrders(ordersData.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
-        }, (error) => {
-          console.error("Error fetching orders:", error);
         });
 
-        return () => unsubOrders();
+        // Fetch All Live Campaigns for Watch Section
+        const qCamp = query(collection(db, "orders"));
+        const unsubCamp = onSnapshot(qCamp, (snapshot) => {
+          const campData: any[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data.status?.includes("Active")) {
+              campData.push({ id: docSnap.id, ...data });
+            }
+          });
+          setAllLiveCampaigns(campData);
+        });
+
+        return () => {
+          unsubOrders();
+          unsubCamp();
+        };
       }
       setLoading(false);
     });
@@ -141,9 +136,7 @@ export default function Home() {
   useEffect(() => {
     let interval: any;
     if (isWatching && timer > 0) {
-      interval = setInterval(() => {
-        setTimer((prev) => prev - 1);
-      }, 1000);
+      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
     } else if (timer === 0 && isWatching) {
       setCanClaim(true);
       setIsWatching(false);
@@ -157,10 +150,18 @@ export default function Home() {
     setTimer(60);
   };
 
+  const handleSkipCampaign = () => {
+    if (allLiveCampaigns.length > 0) {
+      setCurrentCampaignIndex((prev) => (prev + 1) % allLiveCampaigns.length);
+      setTimer(60);
+      setIsWatching(false);
+      setCanClaim(false);
+    }
+  };
+
   const claimReward = async () => {
     if (!user) return;
     
-    // Interstitial ad trigger check after a few clicks
     setClickCount((prev) => {
       const next = prev + 1;
       if (next >= 3) {
@@ -176,8 +177,7 @@ export default function Home() {
       const userRef = doc(db, "users", user.uid);
       await setDoc(userRef, { coins: newCoins }, { merge: true });
       alert(`Successfully claimed +${rewardCoins} ❤️!`);
-      setTimer(60);
-      setCanClaim(false);
+      handleSkipCampaign();
     });
   };
 
@@ -198,10 +198,10 @@ export default function Home() {
       };
       
       await addDoc(collection(db, "orders"), newOrder);
-      alert("Campaign Created Successfully & Now Live!");
+      alert("Campaign Created Successfully & Now Live in Watch Section!");
       setCampaignLink("");
       setRequiredQuantity(10);
-      setBottomTab("profile");
+      setBottomTab("watch");
     } catch (error) {
       alert("Error adding campaign. Check Firebase configuration.");
     }
@@ -226,7 +226,7 @@ export default function Home() {
         status: "Pending (Verify in 10 mins)",
         createdAt: new Date().toISOString()
       });
-      alert(`Fund request submitted! It will be verified and added within 10 minutes using reference: ${fundReference}`);
+      alert(`Fund request submitted! Verified within 10 minutes.`);
       setFundAmount("");
       setFundReference("");
     } catch (err) {
@@ -248,7 +248,7 @@ export default function Home() {
         status: "Processing (Done within 1 hour)",
         createdAt: new Date().toISOString()
       });
-      alert("Withdrawal Request Submitted! Amount will be transferred within 1 hour.");
+      alert("Withdrawal Request Submitted! Transferred within 1 hour.");
       setWithdrawAmount("");
       setWithdrawAccount("");
     } catch (err) {
@@ -274,6 +274,10 @@ export default function Home() {
 
   const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "ytlove.vercel.app"}?ref=${user.uid}`;
 
+  // Filter campaigns for watch section based on selected platform and category
+  const filteredCampaigns = allLiveCampaigns.filter(c => c.platform === platform && c.actionType === watchCategory);
+  const activeCampaignToShow = filteredCampaigns[currentCampaignIndex % (filteredCampaigns.length || 1)];
+
   return (
     <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl">
       
@@ -295,7 +299,7 @@ export default function Home() {
       </div>
 
       {/* PROMO BANNER */}
-      <div className="bg-gradient-to-r from-amber-600 via-red-600 to-pink-600 px-3 py-1 flex justify-between items-center z-20 shrink-0 text-[10px] font-bold">
+      <div className="bg-gradient-to-r from-amber-600 via-red-600 to-pink-600 px-3 py-1 flex justify-between items-center z-25 shrink-0 text-[10px] font-bold">
         <div className="flex items-center space-x-1 truncate">
           <span>🎉</span>
           <span className="truncate">First 100 Users Offer: Get Bonus Points!</span>
@@ -335,82 +339,80 @@ export default function Home() {
         </div>
       )}
 
-      {/* SCROLLABLE CONTENT AREA (Strict fit layout preventing out of bounds) */}
+      {/* SCROLLABLE CONTENT AREA */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-36">
 
-        {/* WATCH SECTION */}
+        {/* WATCH SECTION WITH DEDICATED CATEGORY TABS & SKIP BUTTON */}
         {bottomTab === "watch" && (
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-1.5 bg-[#111] p-1 rounded-xl border border-[#222]">
-              <button onClick={() => setPlatform("YouTube")} className={`py-1.5 text-xs font-bold rounded-lg transition-all ${platform === "YouTube" ? "bg-red-600 text-white" : "text-gray-400"}`}>YouTube</button>
-              <button onClick={() => setPlatform("Facebook")} className={`py-1.5 text-xs font-bold rounded-lg transition-all ${platform === "Facebook" ? "bg-blue-600 text-white" : "text-gray-400"}`}>Facebook</button>
-              <button onClick={() => setPlatform("Instagram")} className={`py-1.5 text-xs font-bold rounded-lg transition-all ${platform === "Instagram" ? "bg-pink-600 text-white" : "text-gray-400"}`}>Instagram</button>
+              {(["YouTube", "Facebook", "Instagram"] as const).map((p) => (
+                <button key={p} onClick={() => { setPlatform(p); setCurrentCampaignIndex(0); }} className={`py-1.5 text-xs font-bold rounded-lg transition-all ${platform === p ? "bg-red-600 text-white" : "text-gray-400"}`}>{p}</button>
+              ))}
             </div>
 
-            <div className="flex gap-1.5 bg-[#111] p-1 rounded-xl border border-[#222]">
-              {availableWatchTabs.map((sub) => (
-                <button key={sub} onClick={() => setWatchSubTab(sub)} className={`flex-1 py-1.5 text-[10px] font-bold rounded-lg ${watchSubTab === sub ? "bg-emerald-600 text-white" : "text-gray-400"}`}>
-                  {sub}
+            {/* Dedicated Action Tabs for Watch Section */}
+            <div className="grid grid-cols-4 gap-1 bg-[#111] p-1 rounded-xl border border-[#222]">
+              {(["Views", "Like", "Subscribe", "Follow"] as const).map((cat) => (
+                <button key={cat} onClick={() => { setWatchCategory(cat); setCurrentCampaignIndex(0); }} className={`py-1.5 text-[10px] font-bold rounded-lg ${watchCategory === cat ? "bg-emerald-600 text-white" : "text-gray-400"}`}>
+                  {cat}
                 </button>
               ))}
             </div>
 
-            <div className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center space-y-4">
+            <div className="bg-[#111] border border-[#222] rounded-2xl p-4 shadow-xl flex flex-col items-center justify-center space-y-3">
               <div className="w-full h-36 bg-black border border-gray-800 rounded-xl overflow-hidden relative flex items-center justify-center">
-                {platform === "YouTube" && (
-                  <iframe className="w-full h-full" src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=0" title="YouTube player" allowFullScreen></iframe>
-                )}
-                {platform === "Facebook" && (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-blue-950/30 p-2 text-center">
-                    <span className="text-2xl mb-1">🔵</span>
-                    <p className="text-[10px] font-bold text-blue-400">Facebook Video Player</p>
+                {activeCampaignToShow ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center bg-zinc-900">
+                    <span className="text-[10px] text-emerald-400 font-bold mb-1">Live Campaign Loaded ({activeCampaignToShow.actionType})</span>
+                    <a href={activeCampaignToShow.link} target="_blank" rel="noreferrer" className="text-xs text-blue-400 underline break-all line-clamp-2">{activeCampaignToShow.link}</a>
                   </div>
-                )}
-                {platform === "Instagram" && (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-pink-950/30 p-2 text-center">
-                    <span className="text-2xl mb-1">📸</span>
-                    <p className="text-[10px] font-bold text-pink-400">Instagram Reel Player</p>
+                ) : (
+                  <div className="text-center p-2">
+                    <p className="text-xs text-gray-500">No live {watchCategory} found for {platform}</p>
+                    <p className="text-[9px] text-gray-600 mt-1">Create a campaign to see it here instantly!</p>
                   </div>
                 )}
               </div>
               
-              <h2 className="font-bold text-xs text-white">{platform} - {watchSubTab}</h2>
-
-              <div className="flex justify-center space-x-2 w-full">
-                <div className="flex items-center justify-center space-x-1 bg-[#222] px-3 py-1.5 rounded-xl w-1/2 border border-[#333]">
-                  <span className="text-red-500">❤️</span><span className="font-bold text-xs">{rewardCoins}</span>
-                </div>
-                <div className="flex items-center justify-center space-x-1 bg-[#222] px-3 py-1.5 rounded-xl w-1/2 border border-[#333]">
-                  <span className="text-gray-300">⏱️</span><span className="font-bold text-xs">{timer}s</span>
-                </div>
+              <div className="flex justify-between w-full text-xs">
+                <span className="text-red-500 font-bold">❤️ Reward: {rewardCoins}</span>
+                <span className="text-gray-300 font-bold">⏱️ Timer: {timer}s</span>
               </div>
 
-              {!canClaim ? (
-                <button onClick={startWatching} disabled={isWatching} className="w-full bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-3 rounded-xl text-xs active:scale-95 transition flex justify-center items-center space-x-1.5">
-                  <span>▶</span> <span>{isWatching ? `Watching... (${timer}s)` : "Start Watching (Unity Rewarded Active)"}</span>
+              <div className="flex gap-2 w-full">
+                {/* Skip / Change Button */}
+                <button onClick={handleSkipCampaign} className="w-1/3 bg-[#333] hover:bg-[#444] text-white font-bold py-2.5 rounded-xl text-xs active:scale-95 transition">
+                  ⏭️ Change
                 </button>
-              ) : (
-                <button onClick={claimReward} className="w-full bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 rounded-xl text-xs active:scale-95 transition flex justify-center items-center space-x-1.5 animate-bounce">
-                  <span>🎁</span> <span>Watch Ad & Claim +{rewardCoins} Points</span>
-                </button>
-              )}
+
+                {!canClaim ? (
+                  <button onClick={startWatching} disabled={isWatching || !activeCampaignToShow} className="w-2/3 bg-[#1db954] hover:bg-[#1ed760] text-white font-bold py-2.5 rounded-xl text-xs active:scale-95 transition">
+                    {isWatching ? `Watching (${timer}s)` : "Start Watching"}
+                  </button>
+                ) : (
+                  <button onClick={claimReward} className="w-2/3 bg-amber-500 hover:bg-amber-600 text-black font-bold py-2.5 rounded-xl text-xs active:scale-95 transition animate-bounce">
+                    🎁 Claim +{rewardCoins}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* CAMPAIGN SECTION (Instant Live Order) */}
+        {/* CAMPAIGN SECTION */}
         {bottomTab === "campaign" && (
           <form onSubmit={handleCreateCampaign} className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3 shadow-xl">
             <h2 className="text-xs font-bold uppercase tracking-wide">Create Instant Live Campaign</h2>
             <div className="grid grid-cols-3 gap-1.5 bg-[#222] p-1 rounded-xl">
-              <button type="button" onClick={() => setPlatform("YouTube")} className={`py-1.5 text-[10px] font-bold rounded-lg ${platform === "YouTube" ? "bg-red-600 text-white" : "text-gray-400"}`}>YouTube</button>
-              <button type="button" onClick={() => setPlatform("Facebook")} className={`py-1.5 text-[10px] font-bold rounded-lg ${platform === "Facebook" ? "bg-blue-600 text-white" : "text-gray-400"}`}>Facebook</button>
-              <button type="button" onClick={() => setPlatform("Instagram")} className={`py-1.5 text-[10px] font-bold rounded-lg ${platform === "Instagram" ? "bg-pink-600 text-white" : "text-gray-400"}`}>Instagram</button>
+              {(["YouTube", "Facebook", "Instagram"] as const).map((p) => (
+                <button key={p} type="button" onClick={() => setPlatform(p)} className={`py-1.5 text-[10px] font-bold rounded-lg ${platform === p ? "bg-red-600 text-white" : "text-gray-400"}`}>{p}</button>
+              ))}
             </div>
             
-            <div className="flex gap-1.5 bg-[#222] p-1 rounded-xl">
-              {availableActionTabs.map((act) => (
-                <button key={act} type="button" onClick={() => setActionType(act)} className={`flex-1 py-1.5 text-[9px] font-bold rounded-lg ${actionType === act ? "bg-green-600 text-white" : "text-gray-400"}`}>
+            <div className="grid grid-cols-4 gap-1 bg-[#222] p-1 rounded-xl">
+              {(["Views", "Like", "Subscribe", "Follow"] as const).map((act) => (
+                <button key={act} type="button" onClick={() => setActionType(act)} className={`py-1.5 text-[9px] font-bold rounded-lg ${actionType === act ? "bg-green-600 text-white" : "text-gray-400"}`}>
                   {act}
                 </button>
               ))}
@@ -427,7 +429,7 @@ export default function Home() {
           </form>
         )}
 
-        {/* WALLET SECTION (10 min UTR and 1 hour Withdraw) */}
+        {/* WALLET SECTION */}
         {bottomTab === "wallet" && (
           <div className="space-y-3">
             <div className="bg-[#111] border border-[#222] rounded-2xl p-4 space-y-3">
@@ -454,7 +456,7 @@ export default function Home() {
                   
                   <input type="number" placeholder="Amount (INR/USDT)" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} required className="w-full bg-[#222] border border-[#333] rounded-xl p-2 text-xs text-white focus:outline-none" />
                   <input type="text" placeholder={paymentMethod === "UPI" ? "Enter 12-Digit UTR Number" : "Enter Transaction Hash"} value={fundReference} onChange={(e) => setFundReference(e.target.value)} required className="w-full bg-[#222] border border-[#333] rounded-xl p-2 text-xs text-white focus:outline-none" />
-                  <p className="text-[9px] text-amber-400 text-center">⏱️ Funds verified and credited within 10 minutes.</p>
+                  <p className="text-[9px] text-amber-400 text-center">⏱️ Verified and credited within 10 minutes.</p>
                   <button type="submit" className="w-full bg-green-600 font-bold py-2.5 rounded-xl text-xs active:scale-95">Submit Payment</button>
                 </form>
               ) : (
@@ -465,7 +467,7 @@ export default function Home() {
                   </div>
                   <input type="number" placeholder="Withdrawal Amount" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} required className="w-full bg-[#222] border border-[#333] rounded-xl p-2 text-xs text-white focus:outline-none" />
                   <input type="text" placeholder="UPI ID or Crypto Address" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} required className="w-full bg-[#222] border border-[#333] rounded-xl p-2 text-xs text-white focus:outline-none" />
-                  <p className="text-[9px] text-amber-400 text-center">⏱️ Withdrawals are processed and sent within 1 hour.</p>
+                  <p className="text-[9px] text-amber-400 text-center">⏱️ Processed within 1 hour.</p>
                   <button type="submit" className="w-full bg-red-600 font-bold py-2.5 rounded-xl text-xs active:scale-95">Request Withdrawal</button>
                 </form>
               )}
@@ -482,7 +484,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* PROFILE & FIXED ORDER HISTORY */}
+        {/* PROFILE & ORDER HISTORY */}
         {bottomTab === "profile" && (
           <div className="space-y-3">
             <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
@@ -528,10 +530,9 @@ export default function Home() {
             <p className="text-red-600 font-bold">VIP membership activates within 2 minutes.</p>
             <p>✔ Remove ads</p>
             <p>✔ 10% discount on campaigns</p>
-            <p>✔ Higher daily limits</p>
           </div>
           <div className="space-y-2">
-            {["Weekly Vip - ₹99", "Monthly Vip - ₹249", "3 Months Vip - ₹599"].map((vip, i) => (
+            {["Weekly Vip - ₹99", "Monthly Vip - ₹249"].map((vip, i) => (
               <div key={i} className="border p-2.5 rounded-xl flex justify-between items-center text-xs">
                 <span className="font-bold">{vip}</span>
                 <button onClick={() => alert("VIP Request Sent")} className="bg-red-600 text-white px-3 py-1 rounded-lg">Buy</button>
@@ -548,7 +549,7 @@ export default function Home() {
             <h1 className="text-xs font-bold uppercase">Buy Points</h1>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {[{ p: "3,000 Pts", pr: "₹19.99" }, { p: "10,000 Pts", pr: "₹50.00" }, { p: "50,000 Pts", pr: "₹250.00" }].map((pack, i) => (
+            {[{ p: "3,000 Pts", pr: "₹19.99" }, { p: "10,000 Pts", pr: "₹50.00" }].map((pack, i) => (
               <div key={i} className="border p-2.5 rounded-xl text-center space-y-1.5">
                 <p className="text-xs font-bold">{pack.p}</p>
                 <p className="text-[10px] text-gray-600">{pack.pr}</p>
