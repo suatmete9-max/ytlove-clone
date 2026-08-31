@@ -2,7 +2,16 @@
 
 import React, { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "@/firebase";
-import { signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, User } from "firebase/auth";
+import { 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  onAuthStateChanged, 
+  signOut, 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  User 
+} from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot, updateDoc, increment, getDocs } from "firebase/firestore";
 
 const UNITY_GAME_ID = "800364184";
@@ -14,6 +23,13 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Email Auth States
+  const [isEmailMode, setIsEmailMode] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
   
   const [coins, setCoins] = useState(0);
   const [walletINR, setWalletINR] = useState(0);
@@ -72,22 +88,31 @@ export default function Home() {
     return `${randomLetter}${randomNumbers}`;
   };
 
-  // Direct External Browser Google Login Handler
   const handleGoogleLogin = async () => {
+    setAuthError("");
     try {
-      // WebView me external browser trigger karne ke liye window.open check
-      const currentUrl = window.location.href;
-      const isWebView = /wv|Android.*Version\/[0-9]/i.test(navigator.userAgent);
-
-      if (isWebView) {
-        // App ke andar browser me Google Auth open karega
-        window.open(`https://ytlove-clone.vercel.app`, "_system");
-      } else {
-        await signInWithRedirect(auth, googleProvider);
-      }
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
-      console.error("Login error:", error);
-      await signInWithRedirect(auth, googleProvider);
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch (err: any) {
+        setAuthError("Google Login Failed. Please use Email Login below.");
+      }
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    try {
+      if (isSignUp) {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+    } catch (err: any) {
+      setAuthError(err.message || "Authentication Failed");
     }
   };
 
@@ -513,28 +538,81 @@ export default function Home() {
 
   if (!user) {
     return (
-      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black">
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
-        <div className="absolute inset-0 bg-black/20 z-0"></div>
+      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-6">
+        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
+        <div className="absolute inset-0 bg-black/60 z-0"></div>
 
-        <div className="relative z-10 p-6 flex flex-col items-center pt-12 space-y-3">
+        <div className="relative z-10 flex flex-col items-center pt-8 space-y-2">
           <div className="bg-black/60 border border-white/20 py-1.5 px-4 rounded-full text-center backdrop-blur-md">
             <p className="text-[11px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
+          <h1 className="text-2xl font-black tracking-tight text-white pt-2">SocialBoost</h1>
         </div>
 
-        <div className="relative z-10 p-6 pb-8 flex flex-col items-center space-y-3">
-          <div className="w-full p-[2px] rounded-full bg-gradient-to-r from-red-500 via-blue-500 to-pink-500 shadow-2xl">
-            <button 
-              onClick={handleGoogleLogin} 
-              className="w-full bg-white py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-lg hover:bg-gray-50 transition"
-            >
-              <span className="text-xl font-bold text-red-600">G</span>
-              <span className="font-bold text-sm text-black">Continue with Google</span>
-              <span className="text-lg text-black">→</span>
-            </button>
-          </div>
-          <p className="text-[10px] text-white/80 text-center font-medium drop-shadow">Secure authentication powered by Firebase</p>
+        <div className="relative z-10 space-y-4 my-auto">
+          {authError && (
+            <p className="text-xs text-red-400 text-center bg-red-950/60 border border-red-800 p-2 rounded-xl">{authError}</p>
+          )}
+
+          {!isEmailMode ? (
+            <div className="space-y-3">
+              <button 
+                onClick={handleGoogleLogin} 
+                className="w-full bg-white py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-lg hover:bg-gray-100 text-black font-bold text-sm"
+              >
+                <span className="text-xl font-bold text-red-600">G</span>
+                <span>Continue with Google</span>
+              </button>
+
+              <button 
+                onClick={() => setIsEmailMode(true)} 
+                className="w-full bg-[#222] border border-[#444] py-3 rounded-full text-xs font-bold text-gray-200 hover:bg-[#333]"
+              >
+                Login with Email & Password
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleEmailAuth} className="bg-[#111]/90 border border-[#333] p-4 rounded-2xl space-y-3 backdrop-blur-md">
+              <div className="flex justify-between items-center border-b border-[#333] pb-2">
+                <span className="text-xs font-bold text-amber-400">{isSignUp ? "Create New Account" : "Sign In with Email"}</span>
+                <button type="button" onClick={() => setIsEmailMode(false)} className="text-xs text-gray-400">← Back</button>
+              </div>
+
+              <input 
+                type="email" 
+                required 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                placeholder="Your Email" 
+                className="w-full bg-[#222] border border-[#333] p-2.5 rounded-xl text-xs text-white focus:outline-none"
+              />
+
+              <input 
+                type="password" 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="Your Password" 
+                className="w-full bg-[#222] border border-[#333] p-2.5 rounded-xl text-xs text-white focus:outline-none"
+              />
+
+              <button type="submit" className="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">
+                {isSignUp ? "Register Account" : "Login"}
+              </button>
+
+              <button 
+                type="button" 
+                onClick={() => setIsSignUp(!isSignUp)} 
+                className="w-full text-center text-[10px] text-gray-400 underline pt-1"
+              >
+                {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="relative z-10 pb-4 text-center">
+          <p className="text-[10px] text-gray-400">Secure authentication powered by Firebase</p>
         </div>
       </main>
     );
@@ -562,7 +640,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Header (Fixed Top) */}
+      {/* Header */}
       <div className={`fixed top-0 left-0 right-0 max-w-md mx-auto p-3 flex justify-between items-center z-40 border-b border-[#222] transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
         <div className="flex items-center space-x-2">
           {bottomTab !== "campaign" && (
