@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "@/firebase";
-import { signInWithPopup, onAuthStateChanged, signOut, User } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot, updateDoc, increment, getDocs } from "firebase/firestore";
 
 const UNITY_GAME_ID = "800364184";
@@ -52,14 +52,12 @@ export default function Home() {
   const [lastClaimDate, setLastClaimDate] = useState("");
   const [hasClaimedToday, setHasClaimedToday] = useState(false);
 
-  const [showVipModal, setShowVipModal] = useState(false);
-  const [showBuyPointsModal, setShowBuyPointsModal] = useState(false);
-
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
   const [isWatching, setIsWatching] = useState(false);
   const [canClaim, setCanClaim] = useState(false);
   const [clickCount, setClickCount] = useState(0);
+  const [copySuccess, setCopySuccess] = useState("");
 
   const UPI_ID = "paytmqr5mq7io@ptys";
   const BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
@@ -72,6 +70,14 @@ export default function Home() {
     const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
     const randomNumbers = Math.floor(100000 + Math.random() * 900000);
     return `${randomLetter}${randomNumbers}`;
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      await signInWithRedirect(auth, googleProvider);
+    }
   };
 
   useEffect(() => {
@@ -122,7 +128,6 @@ export default function Home() {
         if (currentUser) {
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
-
           const todayStr = new Date().toDateString();
 
           if (userSnap.exists()) {
@@ -245,9 +250,7 @@ export default function Home() {
       const refUserDoc = querySnapshot.docs[0];
       const refUserRef = doc(db, "users", refUserDoc.id);
 
-      await updateDoc(refUserRef, {
-        referralEarnings: increment(10)
-      });
+      await updateDoc(refUserRef, { referralEarnings: increment(10) });
 
       const currentUserRef = doc(db, "users", user.uid);
       await updateDoc(currentUserRef, {
@@ -448,6 +451,12 @@ export default function Home() {
     setWithdrawAmount(""); setWithdrawAccount("");
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopySuccess(`${label} Copied!`);
+    setTimeout(() => setCopySuccess(""), 2500);
+  };
+
   const getMediaThumbnail = (url: string, plat: string) => {
     if (!url) return null;
     if (plat === "YouTube") {
@@ -496,7 +505,7 @@ export default function Home() {
         <div className="relative z-10 p-6 pb-8 flex flex-col items-center space-y-3">
           <div className="w-full p-[2px] rounded-full bg-gradient-to-r from-red-500 via-blue-500 to-pink-500 shadow-2xl">
             <button 
-              onClick={() => signInWithPopup(auth, googleProvider)} 
+              onClick={handleGoogleLogin} 
               className="w-full bg-white py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-lg hover:bg-gray-50 transition"
             >
               <span className="text-xl font-bold text-red-600">G</span>
@@ -510,7 +519,9 @@ export default function Home() {
     );
   }
 
-  const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "socialboost.app"}?ref=${myReferralCode}`;
+  const fullReferralLink = typeof window !== "undefined" 
+    ? `${window.location.protocol}//${window.location.host}?ref=${myReferralCode}` 
+    : `https://ytlove-clone.vercel.app?ref=${myReferralCode}`;
 
   const getAvailableCategories = (plat: string) => {
     if (plat === "YouTube") return ["Views", "Subscribe", "Like"];
@@ -522,9 +533,16 @@ export default function Home() {
   const mediaThumbnail = activeCampaignToShow ? getMediaThumbnail(activeCampaignToShow.link, activeCampaignToShow.platform || platform) : null;
 
   return (
-    <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl transition-colors duration-500">
+    <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl">
       
-      <div className={`p-3 flex justify-between items-center z-35 border-b border-[#222] shrink-0 transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
+      {copySuccess && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl animate-bounce">
+          {copySuccess}
+        </div>
+      )}
+
+      {/* Header (Fixed Top) */}
+      <div className={`fixed top-0 left-0 right-0 max-w-md mx-auto p-3 flex justify-between items-center z-40 border-b border-[#222] transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
         <div className="flex items-center space-x-2">
           {bottomTab !== "campaign" && (
             <button onClick={() => setIsSidebarOpen(true)} className="text-lg font-bold p-1">☰</button>
@@ -537,12 +555,13 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center space-x-2 text-xs font-bold">
-          <div className="bg-black/40 px-2.5 py-0.5 rounded-full flex items-center space-x-1">
+          <div className="bg-black/40 px-2.5 py-0.5 rounded-full flex items-center space-x-1 border border-white/10">
             <span className="text-red-500">❤️</span><span>{coins}</span>
           </div>
         </div>
       </div>
 
+      {/* Sidebar Navigation */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 z-50 flex">
           <div className="w-4/5 max-w-xs bg-[#111] h-full p-5 flex flex-col justify-between overflow-y-auto">
@@ -596,8 +615,6 @@ export default function Home() {
               </div>
 
               <div className="space-y-2 text-sm pt-2">
-                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Buy Points</button>
-                <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs text-amber-400">VIP Member</button>
                 <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Refer & Earn</button>
               </div>
             </div>
@@ -607,7 +624,8 @@ export default function Home() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-36">
+      {/* Main Content Area (Perfect Scrollable View for Mobile Screen) */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 pt-16 pb-24">
 
         {bottomTab === "watch" && (
           <div className="space-y-3">
@@ -809,12 +827,12 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
                   
-                  {/* FIXED: QR Code Image Display */}
+                  {/* Dynamic & Static QR Code Display */}
                   <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md">
                     <img 
                       src={
                         paymentMethod === "UPI" 
-                          ? "/upi-qr.png" 
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${UPI_ID}&pn=SocialBoost` 
                           : paymentMethod === "BEP20" 
                           ? "/bep20-qr.png" 
                           : "/trc20-qr.png"
@@ -824,9 +842,19 @@ export default function Home() {
                     />
                   </div>
 
-                  <p className="text-[10px] font-mono bg-[#181818] p-1.5 rounded-lg select-all text-amber-300 break-all">
-                    {paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS}
-                  </p>
+                  {/* Payment Address + COPY BUTTON */}
+                  <div className="bg-[#181818] border border-[#2a2a2a] p-2 rounded-xl flex justify-between items-center space-x-2">
+                    <span className="text-[10px] font-mono text-amber-300 break-all select-all text-left">
+                      {paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS}
+                    </span>
+                    <button 
+                      type="button"
+                      onClick={() => copyToClipboard(paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS, paymentMethod)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
 
                 <form onSubmit={handleAddFundSubmit} className="space-y-2.5">
@@ -889,13 +917,23 @@ export default function Home() {
           <div className="space-y-3">
             <div className="bg-gradient-to-br from-amber-600 to-red-700 p-4 rounded-2xl text-center space-y-2 shadow-lg">
               <h2 className="text-base font-black">Refer Friends & Earn!</h2>
-              <p className="text-xs text-white/90">Share your custom referral code. Earn ₹10 per friend when they join!</p>
-              <div className="bg-black/30 p-2 rounded-xl text-sm font-mono font-bold tracking-wider text-amber-300">
-                {myReferralCode}
+              <p className="text-xs text-white/90">Share your custom referral link. Earn ₹10 per friend when they join!</p>
+              
+              <div className="bg-black/40 border border-white/10 p-2.5 rounded-xl flex items-center justify-between text-xs font-mono font-bold text-amber-300">
+                <span className="truncate mr-2">{fullReferralLink}</span>
+                <button 
+                  onClick={() => copyToClipboard(fullReferralLink, "Referral Link")}
+                  className="bg-amber-400 text-black px-3 py-1 rounded-lg font-bold text-xs shrink-0 shadow hover:bg-amber-300"
+                >
+                  Copy Link
+                </button>
               </div>
-              <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("Referral link copied!"); }} className="bg-white text-black font-bold px-4 py-2 rounded-xl text-xs shadow">
-                Copy Referral Link
-              </button>
+
+              <div className="flex justify-center space-x-2 pt-1">
+                <div className="bg-black/30 px-3 py-1 rounded-lg text-xs font-mono text-gray-300">
+                  Ref Code: <span className="text-amber-300 font-bold">{myReferralCode}</span>
+                </div>
+              </div>
             </div>
 
             <div className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-2">
@@ -963,7 +1001,8 @@ export default function Home() {
 
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 bg-[#111] border-t border-[#222] p-2 flex justify-around items-center z-30">
+      {/* Bottom Navigation Bar (Fixed Bottom) */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#111] border-t border-[#222] p-2 flex justify-around items-center z-40">
         {(["watch", "campaign", "wallet", "refer", "profile"] as const).map((tab) => (
           <button key={tab} onClick={() => setBottomTab(tab)} className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${bottomTab === tab ? "text-red-500 font-bold" : "text-gray-400"}`}>
             <span className="text-base">
