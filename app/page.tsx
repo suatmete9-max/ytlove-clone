@@ -10,6 +10,7 @@ import {
   signOut, 
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   User 
 } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot, updateDoc, increment, getDocs } from "firebase/firestore";
@@ -24,12 +25,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Email Auth States
+  // Email & Forgot Password Auth States
   const [isEmailMode, setIsEmailMode] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
   
   const [coins, setCoins] = useState(0);
   const [walletINR, setWalletINR] = useState(0);
@@ -89,7 +92,7 @@ export default function Home() {
   };
 
   const handleGoogleLogin = async () => {
-    setAuthError("");
+    setAuthError(""); setAuthSuccess("");
     try {
       googleProvider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, googleProvider);
@@ -104,25 +107,26 @@ export default function Home() {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError("");
-    
-    // Trim spaces from email to prevent invalid-email error
+    setAuthError(""); setAuthSuccess("");
     const cleanEmail = email.trim().toLowerCase();
-    
+
     if (!cleanEmail) {
       setAuthError("Please enter a valid email address.");
       return;
     }
 
     try {
-      if (isSignUp) {
+      if (isForgotPassword) {
+        await sendPasswordResetEmail(auth, cleanEmail);
+        setAuthSuccess("Password reset link sent to your email! Please check inbox/spam.");
+      } else if (isSignUp) {
         await createUserWithEmailAndPassword(auth, cleanEmail, password);
       } else {
         await signInWithEmailAndPassword(auth, cleanEmail, password);
       }
     } catch (err: any) {
       if (err.code === "auth/invalid-email") {
-        setAuthError("Invalid email format. Please check for spaces.");
+        setAuthError("Invalid email format.");
       } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
         setAuthError("Incorrect Email or Password.");
       } else if (err.code === "auth/email-already-in-use") {
@@ -571,6 +575,10 @@ export default function Home() {
             <p className="text-xs text-red-400 text-center bg-red-950/60 border border-red-800 p-2 rounded-xl">{authError}</p>
           )}
 
+          {authSuccess && (
+            <p className="text-xs text-green-400 text-center bg-green-950/60 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
+          )}
+
           {!isEmailMode ? (
             <div className="space-y-3">
               <button 
@@ -582,7 +590,7 @@ export default function Home() {
               </button>
 
               <button 
-                onClick={() => setIsEmailMode(true)} 
+                onClick={() => { setIsEmailMode(true); setIsForgotPassword(false); }} 
                 className="w-full bg-[#222] border border-[#444] py-3 rounded-full text-xs font-bold text-gray-200 hover:bg-[#333]"
               >
                 Login with Email & Password
@@ -591,8 +599,10 @@ export default function Home() {
           ) : (
             <form onSubmit={handleEmailAuth} className="bg-[#111]/90 border border-[#333] p-4 rounded-2xl space-y-3 backdrop-blur-md">
               <div className="flex justify-between items-center border-b border-[#333] pb-2">
-                <span className="text-xs font-bold text-amber-400">{isSignUp ? "Create New Account" : "Sign In with Email"}</span>
-                <button type="button" onClick={() => setIsEmailMode(false)} className="text-xs text-gray-400">← Back</button>
+                <span className="text-xs font-bold text-amber-400">
+                  {isForgotPassword ? "Reset Password" : isSignUp ? "Create New Account" : "Sign In with Email"}
+                </span>
+                <button type="button" onClick={() => { setIsEmailMode(false); setIsForgotPassword(false); }} className="text-xs text-gray-400">← Back</button>
               </div>
 
               <input 
@@ -600,30 +610,57 @@ export default function Home() {
                 required 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
-                placeholder="Your Email" 
+                placeholder="Your Registered Email" 
                 className="w-full bg-[#222] border border-[#333] p-2.5 rounded-xl text-xs text-white focus:outline-none"
               />
 
-              <input 
-                type="password" 
-                required 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                placeholder="Your Password" 
-                className="w-full bg-[#222] border border-[#333] p-2.5 rounded-xl text-xs text-white focus:outline-none"
-              />
+              {!isForgotPassword && (
+                <input 
+                  type="password" 
+                  required 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder="Your Password" 
+                  className="w-full bg-[#222] border border-[#333] p-2.5 rounded-xl text-xs text-white focus:outline-none"
+                />
+              )}
+
+              {/* Forgot Password Toggle Link */}
+              {!isSignUp && !isForgotPassword && (
+                <div className="text-right">
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsForgotPassword(true); setAuthError(""); setAuthSuccess(""); }}
+                    className="text-[10px] text-amber-400 hover:underline"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+              )}
 
               <button type="submit" className="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">
-                {isSignUp ? "Register Account" : "Login"}
+                {isForgotPassword ? "Send Reset Link" : isSignUp ? "Register Account" : "Login"}
               </button>
 
-              <button 
-                type="button" 
-                onClick={() => setIsSignUp(!isSignUp)} 
-                className="w-full text-center text-[10px] text-gray-400 underline pt-1"
-              >
-                {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-              </button>
+              <div className="flex justify-between text-[10px] text-gray-400 pt-1">
+                {isForgotPassword ? (
+                  <button 
+                    type="button" 
+                    onClick={() => setIsForgotPassword(false)} 
+                    className="underline text-amber-400"
+                  >
+                    Back to Login
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); setAuthSuccess(""); }} 
+                    className="underline"
+                  >
+                    {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+                  </button>
+                )}
+              </div>
             </form>
           )}
         </div>
