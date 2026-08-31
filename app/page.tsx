@@ -38,7 +38,9 @@ export default function Home() {
   const [referralEarnings, setReferralEarnings] = useState(0);
   const [myReferralCode, setMyReferralCode] = useState("");
   const [inputRefCode, setInputRefCode] = useState("");
-  const [hasEnteredRef, setHasEnteredRef] = useState(false);
+  
+  // Tracking user daily code enter limit (Max 10 per day)
+  const [dailyEnteredCount, setDailyEnteredCount] = useState(0);
   
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
@@ -211,9 +213,17 @@ export default function Home() {
             setCoins(data.coins ?? 0);
             setWalletINR(data.walletINR ?? 0);
             setReferralEarnings(data.referralEarnings ?? 0);
-            setHasEnteredRef(data.hasEnteredRef ?? false);
             setMyReferralCode(data.myReferralCode || generateCustomReferralCode());
             
+            // Daily code enter limit tracking
+            const lastCodeEnterDate = data.lastEnteredCodeDate || "";
+            if (lastCodeEnterDate === todayStr) {
+              setDailyEnteredCount(data.dailyEnteredCount || 0);
+            } else {
+              setDailyEnteredCount(0);
+              await updateDoc(userRef, { dailyEnteredCount: 0, lastEnteredCodeDate: todayStr });
+            }
+
             const savedStreak = data.streakDay || 1;
             const savedLastDate = data.lastClaimDate || "";
             setStreakDay(savedStreak);
@@ -245,17 +255,18 @@ export default function Home() {
               coins: 0, 
               walletINR: signupBonusINR, 
               referralEarnings: 0,
-              hasEnteredRef: false,
               myReferralCode: generatedCode,
               streakDay: 1, 
               lastClaimDate: "",
               dailyRefCount: 0,
-              lastRefDate: ""
+              lastRefDate: "",
+              dailyEnteredCount: 0,
+              lastEnteredCodeDate: todayStr
             });
             setCoins(0);
             setWalletINR(signupBonusINR);
             setMyReferralCode(generatedCode);
-            setHasEnteredRef(false);
+            setDailyEnteredCount(0);
           }
 
           const qOrders = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
@@ -308,9 +319,15 @@ export default function Home() {
     }
   };
 
+  // Apply Referral Code with Daily 10 Invites Limit per User
   const handleApplyReferral = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || hasEnteredRef || !inputRefCode) return;
+    if (!user || !inputRefCode) return;
+
+    if (dailyEnteredCount >= 10) {
+      alert("Daily limit reached! You can enter maximum 10 referral codes per day.");
+      return;
+    }
     
     const formattedCode = inputRefCode.trim().toUpperCase();
 
@@ -335,32 +352,36 @@ export default function Home() {
 
       const todayStr = new Date().toDateString();
       const lastRefDate = refUserData.lastRefDate || "";
-      let currentDailyCount = refUserData.dailyRefCount || 0;
+      let currentOwnerCount = refUserData.dailyRefCount || 0;
 
       if (lastRefDate !== todayStr) {
-        currentDailyCount = 0;
+        currentOwnerCount = 0;
       }
 
-      if (currentDailyCount >= 10) {
-        alert("This user has reached the daily limit of 10 referrals for today. Please try another code.");
+      if (currentOwnerCount >= 10) {
+        alert("This friend's referral code has already reached its daily limit of 10 uses today.");
         return;
       }
 
+      // 1. Reward the Referrer Owner (₹10)
       await updateDoc(refUserRef, { 
         referralEarnings: increment(10),
-        dailyRefCount: currentDailyCount + 1,
+        dailyRefCount: currentOwnerCount + 1,
         lastRefDate: todayStr
       });
 
+      // 2. Reward Current User (₹10) and Increment Daily Entered Count
+      const newEnteredCount = dailyEnteredCount + 1;
       const currentUserRef = doc(db, "users", user.uid);
       await updateDoc(currentUserRef, {
-        hasEnteredRef: true,
-        referralEarnings: increment(10)
+        referralEarnings: increment(10),
+        dailyEnteredCount: newEnteredCount,
+        lastEnteredCodeDate: todayStr
       });
 
       setReferralEarnings(prev => prev + 10);
-      setHasEnteredRef(true);
-      alert("Referral Code Applied Successfully! ₹10 added to your referral balance.");
+      setDailyEnteredCount(newEnteredCount);
+      alert(`Referral Code Applied Successfully! ₹10 added to your referral balance. (${newEnteredCount}/10 used today)`);
       setInputRefCode("");
     } catch (err) {
       alert("Error applying referral code.");
@@ -749,25 +770,28 @@ export default function Home() {
                 <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
               </div>
 
-              {/* Enter Referral Code Block */}
+              {/* Enter Referral Code Block (Supports 10 uses per day) */}
               <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
-                <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
-                <p className="text-[10px] text-gray-400">Enter friend's code (e.g. A839201) to claim ₹10 reward.</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
+                  <span className="text-[10px] text-gray-400 font-bold">{dailyEnteredCount}/10 Used</span>
+                </div>
+                <p className="text-[10px] text-gray-400">Enter friend's code (e.g. A839201) to claim ₹10 reward. (Max 10/day)</p>
                 <form onSubmit={handleApplyReferral} className="space-y-1.5">
                   <input 
                     type="text" 
                     placeholder="Enter Friend's Ref ID" 
                     value={inputRefCode} 
                     onChange={(e) => setInputRefCode(e.target.value)}
-                    disabled={hasEnteredRef}
-                    className={`w-full border p-2 text-xs rounded-xl text-white uppercase ${hasEnteredRef ? 'bg-[#181818] border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-[#222] border-[#333]'}`} 
+                    disabled={dailyEnteredCount >= 10}
+                    className={`w-full border p-2 text-xs rounded-xl text-white uppercase ${dailyEnteredCount >= 10 ? 'bg-[#181818] border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-[#222] border-[#333]'}`} 
                   />
                   <button 
                     type="submit" 
-                    disabled={hasEnteredRef}
-                    className={`w-full py-1.5 rounded-xl text-xs font-bold ${hasEnteredRef ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white'}`}
+                    disabled={dailyEnteredCount >= 10}
+                    className={`w-full py-1.5 rounded-xl text-xs font-bold ${dailyEnteredCount >= 10 ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white'}`}
                   >
-                    {hasEnteredRef ? "Code Applied ✅" : "Apply Code"}
+                    {dailyEnteredCount >= 10 ? "Daily 10 Limit Reached ❌" : "Apply Code"}
                   </button>
                 </form>
               </div>
@@ -796,19 +820,19 @@ export default function Home() {
               <div className="space-y-2 text-sm pt-2">
                 <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium">🤝 Refer & Earn</button>
                 
-                {/* App Developer Link with Pink Color */}
+                {/* Shifted: Support Email Link now placed on top in place of Developer */}
                 <a 
-                  href="mailto:developerappwebsite@gmail.com?subject=App%20Developer%20Query" 
-                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-pink-400"
+                  href="mailto:support.ytlove@gmail.com?subject=Support%20Query" 
+                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-blue-400"
                 >
-                  💻 App Developer: developerappwebsite@gmail.com
+                  📩 Support: support.ytlove@gmail.com
                 </a>
               </div>
             </div>
 
-            {/* Sidebar Bottom Footer Support Info */}
-            <div className="text-center text-[10px] text-gray-400 border-t border-[#222] pt-3 pb-1 space-y-1">
-              <p className="font-semibold text-gray-300">Support Email: <a href="mailto:support.ytlove@gmail.com" className="text-blue-400 underline select-all">support.ytlove@gmail.com</a></p>
+            {/* Shifted: App Developer Email placed at bottom with Pink Color */}
+            <div className="text-center text-[10px] border-t border-[#222] pt-3 pb-1 space-y-1">
+              <p className="font-semibold text-pink-400">App Developer: <a href="mailto:developerappwebsite@gmail.com" className="underline select-all">developerappwebsite@gmail.com</a></p>
               <p className="text-gray-500">SocialBoost v2.6</p>
             </div>
           </div>
@@ -1019,18 +1043,22 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
                   
-                  {/* Dynamic QR Code Generator API for UPI and Crypto */}
-                  <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md">
+                  {/* Dynamic & Fallback Fixed High Reliability QR Code Generator */}
+                  <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md overflow-hidden">
                     <img 
                       src={
                         paymentMethod === "UPI" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}`
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}` 
                           : paymentMethod === "BEP20" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(BEP20_ADDRESS)}`
-                          : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TRC20_ADDRESS)}`
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(BEP20_ADDRESS)}` 
+                          : `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(TRC20_ADDRESS)}`
                       } 
                       alt={`${paymentMethod} QR Code`} 
                       className="w-full h-full object-contain"
+                      onError={(e) => {
+                        // Fallback image source if network fails
+                        (e.target as HTMLImageElement).src = `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=${encodeURIComponent(paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS)}`;
+                      }}
                     />
                   </div>
 
