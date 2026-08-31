@@ -117,9 +117,18 @@ export default function Home() {
 
     try {
       if (isForgotPassword) {
-        await sendPasswordResetEmail(auth, cleanEmail);
-        setAuthSuccess("Password reset link sent to your email! Please check inbox/spam.");
+        // Direct Action Code Settings to prevent instant link expiration
+        const actionCodeSettings = {
+          url: 'https://ytlove-clone.vercel.app',
+          handleCodeInApp: true,
+        };
+        await sendPasswordResetEmail(auth, cleanEmail, actionCodeSettings);
+        setAuthSuccess("🔑 Password reset link sent! Check your inbox or spam folder.");
       } else if (isSignUp) {
+        if (password.length < 6) {
+          setAuthError("Password must be at least 6 characters.");
+          return;
+        }
         await createUserWithEmailAndPassword(auth, cleanEmail, password);
       } else {
         await signInWithEmailAndPassword(auth, cleanEmail, password);
@@ -639,7 +648,7 @@ export default function Home() {
               )}
 
               <button type="submit" className="w-full bg-red-600 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg">
-                {isForgotPassword ? "Send Reset Link" : isSignUp ? "Register Account" : "Login"}
+                {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Login"}
               </button>
 
               <div className="flex justify-between text-[10px] text-gray-400 pt-1">
