@@ -240,6 +240,7 @@ export default function Home() {
             const signupBonusINR = isFirst100 ? 20 : 0;
             const generatedCode = generateCustomReferralCode();
 
+            // FIXED: Set initial coins strictly to 0
             await setDoc(userRef, { 
               email: currentUser.email, 
               coins: 0, 
@@ -796,10 +797,10 @@ export default function Home() {
               <div className="space-y-2 text-sm pt-2">
                 <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium">🤝 Refer & Earn</button>
                 
-                {/* App Developer Link */}
+                {/* App Developer Link with Pink Color */}
                 <a 
                   href="mailto:developerappwebsite@gmail.com?subject=App%20Developer%20Query" 
-                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-amber-300"
+                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-pink-400"
                 >
                   💻 App Developer: developerappwebsite@gmail.com
                 </a>
