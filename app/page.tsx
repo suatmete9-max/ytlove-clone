@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { auth, googleProvider, db } from "@/firebase";
-import { signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, User } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot, updateDoc, increment, getDocs } from "firebase/firestore";
 
 const UNITY_GAME_ID = "800364184";
@@ -122,6 +122,17 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // Handle redirect login result for WebView / Mobile APKs
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          setUser(result.user);
+        }
+      })
+      .catch((err) => {
+        console.error("Redirect Login Error:", err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       try {
