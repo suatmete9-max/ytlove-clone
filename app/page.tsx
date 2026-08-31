@@ -63,7 +63,7 @@ export default function Home() {
   const UPI_ID = "paytmqr5mq7io@ptys";
   const CRYPTO_BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
 
-  // Helper to generate custom 7-digit referral code: 1 Capital Letter + 6 Numbers
+  // Helper to generate custom 7-digit referral code: 1 Capital Letter + 6 Numbers (e.g., A839201)
   const generateCustomReferralCode = () => {
     const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const randomLetter = letters.charAt(Math.floor(Math.random() * letters.length));
@@ -139,7 +139,6 @@ export default function Home() {
               }
             }
           } else {
-            // Check total users for First 100 Users Rs 20 Signup Bonus
             const usersSnapshot = await getDocs(collection(db, "users"));
             const totalUsersCount = usersSnapshot.size;
             const isFirst100 = totalUsersCount < 100;
@@ -198,7 +197,6 @@ export default function Home() {
     }
 
     try {
-      // Find user with this custom referral code
       const usersRef = collection(db, "users");
       const qRef = query(usersRef, where("myReferralCode", "==", inputRefCode.toUpperCase()));
       const querySnapshot = await getDocs(qRef);
@@ -495,6 +493,7 @@ export default function Home() {
   return (
     <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl transition-colors duration-500">
       
+      {/* Header with 3-Color SocialBoost branding: Social (Red), B (Blue), oost (Pink) */}
       <div className={`p-3 flex justify-between items-center z-35 border-b border-[#222] shrink-0 transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
         <div className="flex items-center space-x-2">
           {bottomTab !== "campaign" && (
@@ -503,8 +502,8 @@ export default function Home() {
           {bottomTab === "campaign" && (
             <button onClick={() => setBottomTab("watch")} className="text-lg font-bold p-1">←</button>
           )}
-          <span className="font-bold text-sm">
-            {bottomTab === "campaign" ? "Create Campaign" : "SocialBoost"}
+          <span className="font-black text-sm tracking-tight">
+            <span className="text-red-500">Social</span><span className="text-blue-500">B</span><span className="text-pink-500">oost</span>
           </span>
         </div>
         <div className="flex items-center space-x-2 text-xs font-bold">
@@ -525,7 +524,7 @@ export default function Home() {
 
               <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
                 <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
-                <p className="text-[10px] text-gray-400">Enter friend's code (e.g. A123456) to claim ₹10 reward.</p>
+                <p className="text-[10px] text-gray-400">Enter friend's code (e.g. A839201) to claim ₹10 reward.</p>
                 <form onSubmit={handleApplyReferral} className="space-y-1.5">
                   <input 
                     type="text" 
