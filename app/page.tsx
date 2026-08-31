@@ -72,10 +72,21 @@ export default function Home() {
     return `${randomLetter}${randomNumbers}`;
   };
 
+  // Direct External Browser Google Login Handler
   const handleGoogleLogin = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      // WebView me external browser trigger karne ke liye window.open check
+      const currentUrl = window.location.href;
+      const isWebView = /wv|Android.*Version\/[0-9]/i.test(navigator.userAgent);
+
+      if (isWebView) {
+        // App ke andar browser me Google Auth open karega
+        window.open(`https://ytlove-clone.vercel.app`, "_system");
+      } else {
+        await signInWithRedirect(auth, googleProvider);
+      }
     } catch (error: any) {
+      console.error("Login error:", error);
       await signInWithRedirect(auth, googleProvider);
     }
   };
@@ -122,7 +133,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Handle redirect login result for WebView / Mobile APKs
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
@@ -635,7 +645,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main Content Area (Perfect Scrollable View for Mobile Screen) */}
+      {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 pt-16 pb-24">
 
         {bottomTab === "watch" && (
@@ -838,7 +848,6 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
                   
-                  {/* Dynamic & Static QR Code Display */}
                   <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md">
                     <img 
                       src={
@@ -853,7 +862,6 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Payment Address + COPY BUTTON */}
                   <div className="bg-[#181818] border border-[#2a2a2a] p-2 rounded-xl flex justify-between items-center space-x-2">
                     <span className="text-[10px] font-mono text-amber-300 break-all select-all text-left">
                       {paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS}
@@ -1012,7 +1020,7 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom Navigation Bar (Fixed Bottom) */}
+      {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#111] border-t border-[#222] p-2 flex justify-around items-center z-40">
         {(["watch", "campaign", "wallet", "refer", "profile"] as const).map((tab) => (
           <button key={tab} onClick={() => setBottomTab(tab)} className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${bottomTab === tab ? "text-red-500 font-bold" : "text-gray-400"}`}>
