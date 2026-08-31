@@ -8,15 +8,15 @@
   "theme_color": "#cc0000",
   "icons": [
     {
-      "src": "https://ytlove-clone.vercel.app/login-bg.png.jpeg",
+      "src": "/login-bg.png.jpeg",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://ytlove-clone.vercel.app/login-bg.png.jpeg",
+      "src": "/login-bg.png.jpeg",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]
