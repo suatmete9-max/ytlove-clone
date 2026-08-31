@@ -1,8 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { auth, googleProvider, db } from "@/firebase";
-import { signInWithPopup, signInWithRedirect, onAuthStateChanged, signOut, User } from "firebase/auth";
+import { auth, db } from "@/firebase";
+import { 
+  onAuthStateChanged, 
+  signOut, 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendPasswordResetEmail,
+  User 
+} from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, query, collection, where, onSnapshot, updateDoc, increment, getDocs } from "firebase/firestore";
 
 const UNITY_GAME_ID = "800364184";
@@ -14,6 +21,14 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Email & Forgot Password Auth States
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
   
   const [coins, setCoins] = useState(0);
   const [walletINR, setWalletINR] = useState(0);
@@ -72,11 +87,43 @@ export default function Home() {
     return `${randomLetter}${randomNumbers}`;
   };
 
-  const handleGoogleLogin = async () => {
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(""); setAuthSuccess("");
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      setAuthError("Please enter a valid email address.");
+      return;
+    }
+
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      await signInWithRedirect(auth, googleProvider);
+      if (isForgotPassword) {
+        const actionCodeSettings = {
+          url: 'https://ytlove-clone.vercel.app',
+          handleCodeInApp: true,
+        };
+        await sendPasswordResetEmail(auth, cleanEmail, actionCodeSettings);
+        setAuthSuccess("🔑 Password reset email sent! Check your inbox.");
+      } else if (isSignUp) {
+        if (password.length < 6) {
+          setAuthError("Password must be at least 6 characters.");
+          return;
+        }
+        await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      } else {
+        await signInWithEmailAndPassword(auth, cleanEmail, password);
+      }
+    } catch (err: any) {
+      if (err.code === "auth/invalid-email") {
+        setAuthError("Invalid email format.");
+      } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setAuthError("Incorrect Email or Password.");
+      } else if (err.code === "auth/email-already-in-use") {
+        setAuthError("Email already registered! Please Sign In.");
+      } else {
+        setAuthError(err.message || "Authentication Failed");
+      }
     }
   };
 
@@ -492,28 +539,93 @@ export default function Home() {
 
   if (!user) {
     return (
-      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black">
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
-        <div className="absolute inset-0 bg-black/20 z-0"></div>
+      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-6">
+        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
+        <div className="absolute inset-0 bg-black/60 z-0"></div>
 
-        <div className="relative z-10 p-6 flex flex-col items-center pt-12 space-y-3">
+        <div className="relative z-10 flex flex-col items-center pt-8 space-y-2">
           <div className="bg-black/60 border border-white/20 py-1.5 px-4 rounded-full text-center backdrop-blur-md">
             <p className="text-[11px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
+          <h1 className="text-2xl font-black tracking-tight text-white pt-2">SocialBoost</h1>
         </div>
 
-        <div className="relative z-10 p-6 pb-8 flex flex-col items-center space-y-3">
-          <div className="w-full p-[2px] rounded-full bg-gradient-to-r from-red-500 via-blue-500 to-pink-500 shadow-2xl">
-            <button 
-              onClick={handleGoogleLogin} 
-              className="w-full bg-white py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-lg hover:bg-gray-50 transition"
-            >
-              <span className="text-xl font-bold text-red-600">G</span>
-              <span className="font-bold text-sm text-black">Continue with Google</span>
-              <span className="text-lg text-black">→</span>
+        <div className="relative z-10 space-y-4 my-auto">
+          {authError && (
+            <p className="text-xs text-red-400 text-center bg-red-950/60 border border-red-800 p-2 rounded-xl">{authError}</p>
+          )}
+
+          {authSuccess && (
+            <p className="text-xs text-green-400 text-center bg-green-950/60 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
+          )}
+
+          <form onSubmit={handleEmailAuth} className="bg-[#111]/90 border border-[#333] p-5 rounded-2xl space-y-3.5 backdrop-blur-md shadow-2xl">
+            <div className="flex justify-between items-center border-b border-[#333] pb-2">
+              <span className="text-sm font-bold text-amber-400">
+                {isForgotPassword ? "Reset Password" : isSignUp ? "Create New Account" : "Sign In to Account"}
+              </span>
+            </div>
+
+            <input 
+              type="email" 
+              required 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              placeholder="Enter Your Email" 
+              className="w-full bg-[#222] border border-[#333] p-3 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+            />
+
+            {!isForgotPassword && (
+              <input 
+                type="password" 
+                required 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="Enter Your Password" 
+                className="w-full bg-[#222] border border-[#333] p-3 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+              />
+            )}
+
+            {!isSignUp && !isForgotPassword && (
+              <div className="text-right">
+                <button 
+                  type="button" 
+                  onClick={() => { setIsForgotPassword(true); setAuthError(""); setAuthSuccess(""); }}
+                  className="text-[11px] text-amber-400 font-medium hover:underline"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+            )}
+
+            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg transition">
+              {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Login"}
             </button>
-          </div>
-          <p className="text-[10px] text-white/80 text-center font-medium drop-shadow">Secure authentication powered by Firebase</p>
+
+            <div className="flex justify-between text-[11px] text-gray-400 pt-1">
+              {isForgotPassword ? (
+                <button 
+                  type="button" 
+                  onClick={() => { setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
+                  className="underline text-amber-400 font-bold"
+                >
+                  ← Back to Login
+                </button>
+              ) : (
+                <button 
+                  type="button" 
+                  onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); setAuthSuccess(""); }} 
+                  className="underline text-gray-300 font-medium"
+                >
+                  {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        <div className="relative z-10 pb-4 text-center">
+          <p className="text-[10px] text-gray-400">Secure authentication powered by Firebase</p>
         </div>
       </main>
     );
@@ -541,7 +653,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Header (Fixed Top) */}
+      {/* Header */}
       <div className={`fixed top-0 left-0 right-0 max-w-md mx-auto p-3 flex justify-between items-center z-40 border-b border-[#222] transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
         <div className="flex items-center space-x-2">
           {bottomTab !== "campaign" && (
@@ -624,7 +736,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main Content Area (Perfect Scrollable View for Mobile Screen) */}
+      {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 pt-16 pb-24">
 
         {bottomTab === "watch" && (
@@ -827,7 +939,6 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
                   
-                  {/* Dynamic & Static QR Code Display */}
                   <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md">
                     <img 
                       src={
@@ -842,7 +953,6 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Payment Address + COPY BUTTON */}
                   <div className="bg-[#181818] border border-[#2a2a2a] p-2 rounded-xl flex justify-between items-center space-x-2">
                     <span className="text-[10px] font-mono text-amber-300 break-all select-all text-left">
                       {paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS}
@@ -1001,7 +1111,7 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom Navigation Bar (Fixed Bottom) */}
+      {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#111] border-t border-[#222] p-2 flex justify-around items-center z-40">
         {(["watch", "campaign", "wallet", "refer", "profile"] as const).map((tab) => (
           <button key={tab} onClick={() => setBottomTab(tab)} className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${bottomTab === tab ? "text-red-500 font-bold" : "text-gray-400"}`}>
