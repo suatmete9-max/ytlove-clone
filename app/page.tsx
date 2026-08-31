@@ -40,6 +40,8 @@ export default function Home() {
   const [inputRefCode, setInputRefCode] = useState("");
   const [hasEnteredRef, setHasEnteredRef] = useState(false);
   
+  const [dailyEnteredCount, setDailyEnteredCount] = useState(0);
+  
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
   const [platform, setPlatform] = useState<"YouTube" | "Facebook" | "Instagram">("YouTube");
@@ -308,7 +310,6 @@ export default function Home() {
     }
   };
 
-  // User enters 1 referral code only. Code Owner gets max 10 successful invites per day.
   const handleApplyReferral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || hasEnteredRef || !inputRefCode) return;
@@ -342,20 +343,17 @@ export default function Home() {
         currentOwnerCount = 0;
       }
 
-      // Owner Daily Limit Check (Max 10 users invited per day)
       if (currentOwnerCount >= 10) {
         alert("This referral code has reached its daily limit of 10 invites for today. Try another code!");
         return;
       }
 
-      // 1. Reward the Referrer Owner (₹10) & Increment daily count
       await updateDoc(refUserRef, { 
         referralEarnings: increment(10),
         dailyRefCount: currentOwnerCount + 1,
         lastRefDate: todayStr
       });
 
-      // 2. Lock Current User box forever & Reward User (₹10)
       const currentUserRef = doc(db, "users", user.uid);
       await updateDoc(currentUserRef, {
         hasEnteredRef: true,
@@ -594,32 +592,36 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
+  // OPTIMIZED LOGIN PAGE (Background Photo Fully Visible)
   if (!user) {
     return (
-      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-6">
-        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-40" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
-        <div className="absolute inset-0 bg-black/60 z-0"></div>
+      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-5">
+        {/* Full Image Background with Light Overlay so Photo is Clearly Visible */}
+        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
+        <div className="absolute inset-0 bg-black/35 z-0"></div>
 
-        <div className="relative z-10 flex flex-col items-center pt-8 space-y-2">
-          <div className="bg-black/60 border border-white/20 py-1.5 px-4 rounded-full text-center backdrop-blur-md">
-            <p className="text-[11px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
+        {/* Top Header */}
+        <div className="relative z-10 flex flex-col items-center pt-4 space-y-1">
+          <div className="bg-black/60 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md">
+            <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white pt-2">SocialBoost</h1>
+          <h1 className="text-xl font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        <div className="relative z-10 space-y-3 my-auto">
+        {/* Center Compact Form Box */}
+        <div className="relative z-10 space-y-2 my-auto">
           {authError && (
-            <p className="text-xs text-red-400 text-center bg-red-950/80 border border-red-800 p-2.5 rounded-xl font-medium">{authError}</p>
+            <p className="text-[11px] text-red-300 text-center bg-red-950/80 border border-red-800 p-2 rounded-xl">{authError}</p>
           )}
 
           {authSuccess && (
-            <p className="text-xs text-green-400 text-center bg-green-950/80 border border-green-800 p-2.5 rounded-xl font-medium">{authSuccess}</p>
+            <p className="text-[11px] text-green-300 text-center bg-green-950/80 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
           )}
 
-          <form onSubmit={handleEmailAuth} className="bg-[#111]/95 border border-[#333] p-5 rounded-2xl space-y-3.5 backdrop-blur-md shadow-2xl">
-            <div className="flex justify-between items-center border-b border-[#333] pb-2">
-              <span className="text-sm font-bold text-amber-400">
-                {isForgotPassword ? "Reset Password" : isSignUp ? "Create New Account" : "Sign In to Account"}
+          <form onSubmit={handleEmailAuth} className="bg-black/75 border border-white/20 p-4 rounded-2xl space-y-3 backdrop-blur-md shadow-2xl">
+            <div className="flex justify-between items-center border-b border-white/10 pb-1.5">
+              <span className="text-xs font-bold text-amber-400">
+                {isForgotPassword ? "Reset Password" : isSignUp ? "Create New Account" : "Sign In with Email"}
               </span>
             </div>
 
@@ -629,7 +631,7 @@ export default function Home() {
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               placeholder="Enter Your Email" 
-              className="w-full bg-[#222] border border-[#333] p-3 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+              className="w-full bg-[#181818]/90 border border-white/10 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
             />
 
             {!isForgotPassword && (
@@ -639,7 +641,7 @@ export default function Home() {
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)} 
                 placeholder="Enter Your Password" 
-                className="w-full bg-[#222] border border-[#333] p-3 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500"
+                className="w-full bg-[#181818]/90 border border-white/10 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
               />
             )}
 
@@ -648,31 +650,31 @@ export default function Home() {
                 <button 
                   type="button" 
                   onClick={() => { setIsForgotPassword(true); setAuthError(""); setAuthSuccess(""); }}
-                  className="text-[11px] text-amber-400 font-medium hover:underline"
+                  className="text-[10px] text-amber-400 hover:underline"
                 >
                   Forgot Password?
                 </button>
               </div>
             )}
 
-            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg transition">
-              {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Login"}
+            <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition">
+              {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Sign In"}
             </button>
 
             {!isForgotPassword && (
-              <div className="pt-2 border-t border-[#222]">
+              <div className="pt-1.5 border-t border-white/10">
                 <button 
                   type="button"
                   onClick={handleGoogleLogin} 
-                  className="w-full bg-white py-3 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
+                  className="w-full bg-white py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
                 >
-                  <span className="text-base font-bold text-red-600">G</span>
+                  <span className="text-sm font-bold text-red-600">G</span>
                   <span>Continue with Google</span>
                 </button>
               </div>
             )}
 
-            <div className="flex justify-between text-[11px] text-gray-400 pt-1">
+            <div className="flex justify-between text-[10px] text-gray-300 pt-0.5">
               {isForgotPassword ? (
                 <button 
                   type="button" 
@@ -685,7 +687,7 @@ export default function Home() {
                 <button 
                   type="button" 
                   onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); setAuthSuccess(""); }} 
-                  className="underline text-gray-300 font-medium"
+                  className="underline text-gray-200 font-medium"
                 >
                   {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
                 </button>
@@ -694,8 +696,8 @@ export default function Home() {
           </form>
         </div>
 
-        <div className="relative z-10 pb-4 text-center">
-          <p className="text-[10px] text-gray-400">Secure authentication powered by Firebase</p>
+        <div className="relative z-10 pb-2 text-center">
+          <p className="text-[9px] text-gray-300 font-medium drop-shadow">Secure authentication powered by Firebase</p>
         </div>
       </main>
     );
@@ -753,7 +755,7 @@ export default function Home() {
                 <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
               </div>
 
-              {/* Enter Referral Code Block (User locks after 1 use) */}
+              {/* Enter Referral Code Block */}
               <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
