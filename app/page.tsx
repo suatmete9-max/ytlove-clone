@@ -431,14 +431,14 @@ export default function Home() {
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black">
-        {/* Exact Screenshot Background Design */}
-        <div className="absolute inset-0 flex z-0 opacity-90">
+        {/* Exact Screenshot Matching Background & Layout */}
+        <div className="absolute inset-0 flex z-0">
           <div className="w-1/3 h-full bg-[#cc0000]"></div>
           <div className="w-1/3 h-full bg-[#1877f2] transform skew-x-12 scale-125 origin-top"></div>
-          <div className="w-1/3 h-full bg-gradient-to-b from-[#e1306c] to-[#833ab4]"></div>
+          <div className="w-1/3 h-full bg-gradient-to-b from-[#ff2a85] to-[#9c27b0]"></div>
         </div>
 
-        <div className="relative z-10 p-6 flex flex-col items-center pt-10 space-y-4">
+        <div className="relative z-10 p-6 flex flex-col items-center pt-8 space-y-3">
           <div className="flex space-x-6">
             <div className="flex flex-col items-center">
               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-lg"><span className="text-red-600 font-extrabold text-xl">▶</span></div>
@@ -454,25 +454,27 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="text-center mt-6">
-            <h1 className="text-5xl font-black tracking-tight drop-shadow-md text-white font-sans">SocialBoost</h1>
-            <p className="text-sm font-bold tracking-widest uppercase text-white/90 mt-1">Boost • Grow • Succeed</p>
+          <div className="text-center mt-4">
+            <h1 className="text-4xl font-black tracking-tight text-white drop-shadow-lg font-sans">SocialBoost</h1>
+            <p className="text-xs font-bold tracking-widest uppercase text-white/90 mt-1">BOOST • GROW • SUCCEED</p>
           </div>
 
-          <div className="bg-black/60 border border-white/20 p-2.5 rounded-xl text-center backdrop-blur-md mt-4 animate-bounce">
-            <p className="text-xs font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
+          <div className="bg-black/60 border border-white/20 py-1.5 px-3 rounded-full text-center backdrop-blur-md mt-2">
+            <p className="text-[11px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
         </div>
 
-        <div className="relative z-10 bg-white text-black rounded-t-[35px] p-6 shadow-2xl flex flex-col items-center space-y-4">
-          <button 
-            onClick={() => signInWithPopup(auth, googleProvider)} 
-            className="w-full bg-white border-2 border-gray-200 py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-lg hover:bg-gray-50 transition"
-          >
-            <span className="text-xl font-bold text-red-600">G</span>
-            <span className="font-bold text-sm">Continue with Google</span>
-            <span className="text-lg">→</span>
-          </button>
+        <div className="relative z-10 bg-white text-black rounded-t-[35px] p-6 shadow-2xl flex flex-col items-center space-y-3">
+          <div className="w-full p-[2px] rounded-full bg-gradient-to-r from-red-500 via-blue-500 to-pink-500">
+            <button 
+              onClick={() => signInWithPopup(auth, googleProvider)} 
+              className="w-full bg-white py-3.5 rounded-full flex items-center justify-center space-x-3 shadow-md hover:bg-gray-50 transition"
+            >
+              <span className="text-xl font-bold text-red-600">G</span>
+              <span className="font-bold text-sm text-black">Continue with Google</span>
+              <span className="text-lg text-black">→</span>
+            </button>
+          </div>
           <p className="text-[10px] text-gray-400 text-center">Secure authentication powered by Firebase</p>
         </div>
       </main>
@@ -871,7 +873,7 @@ export default function Home() {
           <span className="text-lg">🎁</span>
           <span className="text-[9px] font-bold">Refer</span>
         </button>
-        <button onClick={() => setBottomTab("profile")} className={`flex flex-1 flex-col items-center ${bottomTab === "profile" ? "text-red-500" : "text-gray-400"}`}>
+        <button onClick={() => { setShowBuyPointsModal(true); setBottomTab("profile"); }} className={`flex flex-1 flex-col items-center ${bottomTab === "profile" ? "text-red-500" : "text-gray-400"}`}>
           <span className="text-lg">👤</span>
           <span className="text-[9px] font-bold">Profile</span>
         </button>
