@@ -105,14 +105,31 @@ export default function Home() {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
+    
+    // Trim spaces from email to prevent invalid-email error
+    const cleanEmail = email.trim().toLowerCase();
+    
+    if (!cleanEmail) {
+      setAuthError("Please enter a valid email address.");
+      return;
+    }
+
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, cleanEmail, password);
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, cleanEmail, password);
       }
     } catch (err: any) {
-      setAuthError(err.message || "Authentication Failed");
+      if (err.code === "auth/invalid-email") {
+        setAuthError("Invalid email format. Please check for spaces.");
+      } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setAuthError("Incorrect Email or Password.");
+      } else if (err.code === "auth/email-already-in-use") {
+        setAuthError("Email already registered! Click 'Already have an account? Sign In'.");
+      } else {
+        setAuthError(err.message || "Authentication Failed");
+      }
     }
   };
 
