@@ -15,9 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ytLove — Watch, earn, grow",
+  title: "ytLove – Watch, earn, grow",
   description:
     "Watch videos to earn coins, then spend them on view, like, and subscriber campaigns.",
+  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
