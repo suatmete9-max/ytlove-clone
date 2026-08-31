@@ -133,7 +133,7 @@ export default function Home() {
       }
     } catch (err: any) {
       if (err.code === "auth/operation-not-allowed") {
-        setAuthError("Email/Password Sign-In is disabled in Firebase Console. Please enable it in Firebase -> Authentication -> Sign-in method.");
+        setAuthError("Please enable 'Email/Password' in Firebase Console.");
       } else if (err.code === "auth/invalid-email") {
         setAuthError("Invalid email format.");
       } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
@@ -208,10 +208,10 @@ export default function Home() {
 
           if (userSnap.exists()) {
             const data = userSnap.data();
-            setCoins(data.coins || 0);
-            setWalletINR(data.walletINR || 0);
-            setReferralEarnings(data.referralEarnings || 0);
-            setHasEnteredRef(data.hasEnteredRef || false);
+            setCoins(data.coins ?? 0);
+            setWalletINR(data.walletINR ?? 0);
+            setReferralEarnings(data.referralEarnings ?? 0);
+            setHasEnteredRef(data.hasEnteredRef ?? false);
             setMyReferralCode(data.myReferralCode || generateCustomReferralCode());
             
             const savedStreak = data.streakDay || 1;
@@ -242,17 +242,20 @@ export default function Home() {
 
             await setDoc(userRef, { 
               email: currentUser.email, 
-              coins: 500, 
+              coins: 0, 
               walletINR: signupBonusINR, 
               referralEarnings: 0,
               hasEnteredRef: false,
               myReferralCode: generatedCode,
               streakDay: 1, 
-              lastClaimDate: "" 
+              lastClaimDate: "",
+              dailyRefCount: 0,
+              lastRefDate: ""
             });
-            setCoins(500);
+            setCoins(0);
             setWalletINR(signupBonusINR);
             setMyReferralCode(generatedCode);
+            setHasEnteredRef(false);
           }
 
           const qOrders = query(collection(db, "orders"), where("userId", "==", currentUser.uid));
@@ -308,14 +311,17 @@ export default function Home() {
   const handleApplyReferral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || hasEnteredRef || !inputRefCode) return;
-    if (inputRefCode.toUpperCase() === myReferralCode) {
+    
+    const formattedCode = inputRefCode.trim().toUpperCase();
+
+    if (formattedCode === myReferralCode) {
       alert("You cannot use your own referral code!");
       return;
     }
 
     try {
       const usersRef = collection(db, "users");
-      const qRef = query(usersRef, where("myReferralCode", "==", inputRefCode.toUpperCase()));
+      const qRef = query(usersRef, where("myReferralCode", "==", formattedCode));
       const querySnapshot = await getDocs(qRef);
 
       if (querySnapshot.empty) {
@@ -324,9 +330,27 @@ export default function Home() {
       }
 
       const refUserDoc = querySnapshot.docs[0];
+      const refUserData = refUserDoc.data();
       const refUserRef = doc(db, "users", refUserDoc.id);
 
-      await updateDoc(refUserRef, { referralEarnings: increment(10) });
+      const todayStr = new Date().toDateString();
+      const lastRefDate = refUserData.lastRefDate || "";
+      let currentDailyCount = refUserData.dailyRefCount || 0;
+
+      if (lastRefDate !== todayStr) {
+        currentDailyCount = 0;
+      }
+
+      if (currentDailyCount >= 10) {
+        alert("This user has reached the daily limit of 10 referrals for today. Please try another code.");
+        return;
+      }
+
+      await updateDoc(refUserRef, { 
+        referralEarnings: increment(10),
+        dailyRefCount: currentDailyCount + 1,
+        lastRefDate: todayStr
+      });
 
       const currentUserRef = doc(db, "users", user.uid);
       await updateDoc(currentUserRef, {
@@ -579,13 +603,13 @@ export default function Home() {
           <h1 className="text-2xl font-black tracking-tight text-white pt-2">SocialBoost</h1>
         </div>
 
-        <div className="relative z-10 space-y-4 my-auto">
+        <div className="relative z-10 space-y-3 my-auto">
           {authError && (
-            <p className="text-xs text-red-400 text-center bg-red-950/60 border border-red-800 p-2 rounded-xl">{authError}</p>
+            <p className="text-xs text-red-400 text-center bg-red-950/80 border border-red-800 p-2.5 rounded-xl font-medium">{authError}</p>
           )}
 
           {authSuccess && (
-            <p className="text-xs text-green-400 text-center bg-green-950/60 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
+            <p className="text-xs text-green-400 text-center bg-green-950/80 border border-green-800 p-2.5 rounded-xl font-medium">{authSuccess}</p>
           )}
 
           <form onSubmit={handleEmailAuth} className="bg-[#111]/95 border border-[#333] p-5 rounded-2xl space-y-3.5 backdrop-blur-md shadow-2xl">
@@ -631,7 +655,6 @@ export default function Home() {
               {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Login"}
             </button>
 
-            {/* Google Sign-In Active & Clickable */}
             {!isForgotPassword && (
               <div className="pt-2 border-t border-[#222]">
                 <button 
@@ -726,6 +749,7 @@ export default function Home() {
                 <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
               </div>
 
+              {/* Enter Referral Code Block */}
               <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
                 <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
                 <p className="text-[10px] text-gray-400">Enter friend's code (e.g. A839201) to claim ₹10 reward.</p>
@@ -736,12 +760,12 @@ export default function Home() {
                     value={inputRefCode} 
                     onChange={(e) => setInputRefCode(e.target.value)}
                     disabled={hasEnteredRef}
-                    className="w-full bg-[#222] border border-[#333] p-2 text-xs rounded-xl text-white uppercase" 
+                    className={`w-full border p-2 text-xs rounded-xl text-white uppercase ${hasEnteredRef ? 'bg-[#181818] border-gray-700 text-gray-500 cursor-not-allowed' : 'bg-[#222] border-[#333]'}`} 
                   />
                   <button 
                     type="submit" 
                     disabled={hasEnteredRef}
-                    className={`w-full py-1.5 rounded-xl text-xs font-bold ${hasEnteredRef ? 'bg-gray-700 text-gray-400' : 'bg-green-600 text-white'}`}
+                    className={`w-full py-1.5 rounded-xl text-xs font-bold ${hasEnteredRef ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white'}`}
                   >
                     {hasEnteredRef ? "Code Applied ✅" : "Apply Code"}
                   </button>
@@ -770,10 +794,23 @@ export default function Home() {
               </div>
 
               <div className="space-y-2 text-sm pt-2">
-                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Refer & Earn</button>
+                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium">🤝 Refer & Earn</button>
+                
+                {/* Developer Contact Us Link */}
+                <a 
+                  href="mailto:developerappwebsite@gmail.com?subject=Developer%20Support%20Query" 
+                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-amber-300"
+                >
+                  📩 Developer Contact Us
+                </a>
               </div>
             </div>
-            <div className="text-center text-[10px] text-gray-500 pb-2">SocialBoost v2.6</div>
+
+            {/* Sidebar Bottom Footer Support Info */}
+            <div className="text-center text-[10px] text-gray-400 border-t border-[#222] pt-3 pb-1 space-y-1">
+              <p className="font-semibold text-gray-300">Support: <span className="text-blue-400 underline select-all">support.ytlove@gmail.com</span></p>
+              <p className="text-gray-500">SocialBoost v2.6</p>
+            </div>
           </div>
           <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
         </div>
