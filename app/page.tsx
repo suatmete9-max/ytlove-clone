@@ -36,11 +36,18 @@ export default function Home() {
   const [fundAmount, setFundAmount] = useState("");
   const [fundReference, setFundReference] = useState("");
 
+  const [withdrawCurrency, setWithdrawCurrency] = useState<"INR" | "USDT">("INR");
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawAccount, setWithdrawAccount] = useState("");
 
+  // Daily Bonus States
+  const [streakDay, setStreakDay] = useState(1);
+  const [lastClaimDate, setLastClaimDate] = useState("");
+  const [hasClaimedToday, setHasClaimedToday] = useState(false);
+
   const [showVipModal, setShowVipModal] = useState(false);
   const [showBuyPointsModal, setShowBuyPointsModal] = useState(false);
+  const [showDailyBonusModal, setShowDailyBonusModal] = useState(false);
 
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
@@ -89,12 +96,35 @@ export default function Home() {
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
 
+          const todayStr = new Date().toDateString();
+
           if (userSnap.exists()) {
             const data = userSnap.data();
             setCoins(data.coins || 0);
             setWalletINR(data.walletINR || 0);
+            
+            const savedStreak = data.streakDay || 1;
+            const savedLastDate = data.lastClaimDate || "";
+            setStreakDay(savedStreak);
+            setLastClaimDate(savedLastDate);
+
+            if (savedLastDate) {
+              const lastDateObj = new Date(savedLastDate);
+              const currentDateObj = new Date(todayStr);
+              const diffTime = Math.abs(currentDateObj.getTime() - lastDateObj.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+              if (diffDays > 1) {
+                // Streak broken! Reset to Day 1
+                setStreakDay(1);
+                await setDoc(userRef, { streakDay: 1 }, { merge: true });
+              }
+              if (savedLastDate === todayStr) {
+                setHasClaimedToday(true);
+              }
+            }
           } else {
-            await setDoc(userRef, { email: currentUser.email, coins: 500, walletINR: 20 });
+            await setDoc(userRef, { email: currentUser.email, coins: 500, walletINR: 20, streakDay: 1, lastClaimDate: "" });
             setCoins(500);
             setWalletINR(20);
           }
@@ -121,11 +151,30 @@ export default function Home() {
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false); // Ye ensure karega ki loading kabhi na fase
+        setLoading(false);
       }
     });
     return () => unsubscribe();
   }, []);
+
+  const handleClaimDailyBonus = async () => {
+    if (!user || hasClaimedToday) return;
+    const todayStr = new Date().toDateString();
+    const bonusCoinsMap: { [key: number]: number } = { 1: 50, 2: 100, 3: 150, 4: 200, 5: 300, 6: 400, 7: 600 };
+    const earned = bonusCoinsMap[streakDay] || 50;
+
+    const newCoins = coins + earned;
+    const nextStreak = streakDay >= 7 ? 1 : streakDay + 1;
+
+    setCoins(newCoins);
+    setHasClaimedToday(true);
+    setStreakDay(nextStreak);
+    setLastClaimDate(todayStr);
+
+    const userRef = doc(db, "users", user.uid);
+    await setDoc(userRef, { coins: newCoins, streakDay: nextStreak, lastClaimDate: todayStr }, { merge: true });
+    alert(`Successfully claimed Day ${streakDay} Bonus: ${earned} Coins! 🎉`);
+  };
 
   useEffect(() => {
     let interval: any;
@@ -177,18 +226,35 @@ export default function Home() {
     });
   };
 
+  const getCampaignCost = () => {
+    const costPerUnit = 10; // 10 coins per view/like/subscriber
+    return requiredQuantity * costPerUnit;
+  };
+
   const handleCreateCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !campaignLink) return;
 
+    const totalCost = getCampaignCost();
+    if (coins < totalCost) {
+      alert(`Insufficient coins! You need ${totalCost} coins for this campaign.`);
+      return;
+    }
+
     try {
+      const newCoins = coins - totalCost;
+      setCoins(newCoins);
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { coins: newCoins }, { merge: true });
+
       await addDoc(collection(db, "orders"), {
         userId: user.uid,
         platform,
         actionType,
         link: campaignLink,
         quantity: requiredQuantity,
-        title: `${platform} - ${actionType}`,
+        totalCost,
+        title: `${platform} - ${actionType} (${requiredQuantity} Qty)`,
         status: "Active (Live)",
         createdAt: new Date().toISOString()
       });
@@ -221,9 +287,20 @@ export default function Home() {
   const handleWithdrawSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!withdrawAmount || !withdrawAccount) return;
+    
+    const amtNum = Number(withdrawAmount);
+    if (withdrawCurrency === "USDT" && amtNum < 2) {
+      alert("Minimum USDT withdrawal is $2");
+      return;
+    }
+    if (withdrawCurrency === "INR" && amtNum < 200) {
+      alert("Minimum INR withdrawal is ₹200");
+      return;
+    }
+
     await addDoc(collection(db, "orders"), {
       userId: user?.uid,
-      title: `Withdrawal Request - ₹${withdrawAmount}`,
+      title: `Withdrawal Request - ${withdrawCurrency === "USDT" ? "$" : "₹"}${withdrawAmount} (${withdrawCurrency})`,
       status: "Processing (Done within 1 hour)",
       createdAt: new Date().toISOString()
     });
@@ -297,18 +374,48 @@ export default function Home() {
         </button>
       </div>
 
-      {/* SIDEBAR */}
+      {/* SIDEBAR WITH 7-DAY STREAK DAILY BONUS */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 z-50 flex">
           <div className="w-4/5 max-w-xs bg-[#111] h-full p-5 flex flex-col justify-between">
             <div className="space-y-4">
-              <div className="flex justify-between"><span className="font-bold">Menu</span><button onClick={() => setIsSidebarOpen(false)}>✕</button></div>
-              <div className="space-y-2 text-sm">
-                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2">Buy Points</button>
-                <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 text-amber-400">VIP Member</button>
-                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2">Refer & Earn</button>
+              <div className="flex justify-between items-center border-b border-[#222] pb-2">
+                <span className="font-bold text-sm">Menu & Rewards</span>
+                <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
+              </div>
+
+              {/* Daily Bonus Card in Sidebar */}
+              <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-amber-400">🎁 Daily Streak Bonus</span>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">Day {streakDay}/7</span>
+                </div>
+                <p className="text-[10px] text-gray-400">Login & claim daily. If you miss a day, streak resets to Day 1!</p>
+                
+                <div className="grid grid-cols-4 gap-1 pt-1">
+                  {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                    <div key={d} className={`p-1.5 rounded-lg text-center text-[9px] font-bold border ${d === streakDay ? 'bg-amber-600 border-amber-400 text-white animate-pulse' : d < streakDay ? 'bg-green-900/40 border-green-700 text-green-300' : 'bg-[#222] border-[#333] text-gray-500'}`}>
+                      D{d} <br/> {d === 7 ? '600c' : `${d * 50}c`}
+                    </div>
+                  ))}
+                </div>
+
+                <button 
+                  onClick={handleClaimDailyBonus} 
+                  disabled={hasClaimedToday}
+                  className={`w-full py-2 rounded-xl text-xs font-bold mt-2 ${hasClaimedToday ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-red-600 text-white'}`}
+                >
+                  {hasClaimedToday ? "Already Claimed Today ✅" : `Claim Day ${streakDay} Reward`}
+                </button>
+              </div>
+
+              <div className="space-y-2 text-sm pt-2">
+                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Buy Points</button>
+                <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs text-amber-400">VIP Member</button>
+                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Refer & Earn</button>
               </div>
             </div>
+            <div className="text-center text-[10px] text-gray-500 pb-2">ytLove v2.4 Safe Build</div>
           </div>
           <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
         </div>
@@ -394,7 +501,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* CAMPAIGN SECTION */}
+        {/* CAMPAIGN SECTION WITH PRICE & QUANTITY PREVIEW */}
         {bottomTab === "campaign" && (
           <form onSubmit={handleCreateCampaign} className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3">
             <h2 className="text-xs font-bold uppercase">Create Live Campaign</h2>
@@ -411,14 +518,39 @@ export default function Home() {
             </div>
 
             <input type="url" required value={campaignLink} onChange={(e) => setCampaignLink(e.target.value)} placeholder="Paste Link..." className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white" />
-            <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white" />
+            
+            <div className="space-y-1">
+              <label className="text-[10px] text-gray-400">Quantity ({actionType}):</label>
+              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white" />
+            </div>
+
+            {/* Price Preview Banner */}
+            <div className="bg-emerald-950/40 border border-emerald-800 p-2.5 rounded-xl flex justify-between items-center text-xs">
+              <span className="text-gray-300 font-bold">Total Cost:</span>
+              <span className="text-emerald-400 font-bold">❤️ {getCampaignCost()} Coins</span>
+            </div>
+
             <button type="submit" className="w-full bg-red-600 font-bold py-2.5 rounded-xl text-xs">Launch Live Campaign</button>
           </form>
         )}
 
-        {/* WALLET SECTION */}
+        {/* WALLET SECTION WITH BALANCE & BEP20 USDT WARNING */}
         {bottomTab === "wallet" && (
           <div className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3">
+            
+            {/* Balance Card at Top of Wallet */}
+            <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-xl flex justify-around items-center text-center">
+              <div>
+                <p className="text-[9px] text-gray-400">Coins Balance</p>
+                <p className="text-sm font-bold text-red-500">❤️ {coins}</p>
+              </div>
+              <div className="h-6 w-[1px] bg-[#333]"></div>
+              <div>
+                <p className="text-[9px] text-gray-400">INR Wallet</p>
+                <p className="text-sm font-bold text-emerald-400">₹{walletINR}</p>
+              </div>
+            </div>
+
             <div className="flex bg-[#222] rounded-xl p-1 gap-1">
               <button onClick={() => setWalletTab("Add Fund")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Add Fund" ? "bg-green-600 text-white" : "text-gray-400"}`}>Add Fund</button>
               <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400"}`}>Withdraw</button>
@@ -445,8 +577,8 @@ export default function Home() {
                       <div className="w-32 h-32 bg-white mx-auto p-2 rounded-xl flex items-center justify-center">
                         <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}`} alt="Crypto QR" className="w-full h-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-gray-400">BEP20 Network Only (USDT/BNB)</p>
-                      <p className="text-[10px] font-mono font-bold text-amber-400 break-all select-all">{CRYPTO_BEP20_ADDRESS}</p>
+                      <p className="text-[10px] text-amber-400 font-bold">BEP20 Network Only (USDT/BNB)</p>
+                      <p className="text-[10px] font-mono font-bold text-gray-300 break-all select-all">{CRYPTO_BEP20_ADDRESS}</p>
                     </>
                   )}
                 </div>
@@ -458,9 +590,24 @@ export default function Home() {
                 </form>
               </div>
             ) : (
-              <form onSubmit={handleWithdrawSubmit} className="space-y-2">
-                <input type="number" placeholder="Withdrawal Amount" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} required className="w-full bg-[#222] p-2 text-xs rounded-xl text-white" />
-                <input type="text" placeholder="UPI ID / Crypto Address" value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} required className="w-full bg-[#222] p-2 text-xs rounded-xl text-white" />
+              <form onSubmit={handleWithdrawSubmit} className="space-y-3">
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setWithdrawCurrency("INR")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "INR" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>INR (Min ₹200)</button>
+                  <button type="button" onClick={() => setWithdrawCurrency("USDT")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "USDT" ? "bg-amber-600 border-amber-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>USDT (Min $2)</button>
+                </div>
+
+                <input type="number" placeholder={withdrawCurrency === "USDT" ? "Withdrawal Amount ($)" : "Withdrawal Amount (₹)"} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} required className="w-full bg-[#222] p-2.5 text-xs rounded-xl text-white border border-[#333]" />
+                
+                <div className="space-y-1">
+                  <input type="text" placeholder={withdrawCurrency === "USDT" ? "Enter BEP20 Wallet Address" : "Enter UPI ID / Bank Details"} value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} required className="w-full bg-[#222] p-2.5 text-xs rounded-xl text-white border border-[#333]" />
+                  {withdrawCurrency === "USDT" && (
+                    <p className="text-[10px] text-amber-400 font-bold px-1">⚠️ Please enter valid BEP20 Address only ($2 min)</p>
+                  )}
+                  {withdrawCurrency === "INR" && (
+                    <p className="text-[10px] text-gray-400 px-1">Minimum withdrawal: ₹200</p>
+                  )}
+                </div>
+
                 <button type="submit" className="w-full bg-red-600 py-2.5 rounded-xl text-xs font-bold">Request Withdrawal</button>
               </form>
             )}
