@@ -21,11 +21,11 @@ export default function Home() {
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
   const [platform, setPlatform] = useState<"YouTube" | "Facebook" | "Instagram">("YouTube");
-  const [watchCategory, setWatchCategory] = useState<"Views" | "Like" | "Subscribe" | "Follow">("Views");
-  const [actionType, setActionType] = useState<string>("Views");
+  const [campaignType, setCampaignType] = useState<"View" | "Subscribe" | "Like">("View");
   
   const [campaignLink, setCampaignLink] = useState("");
-  const [requiredQuantity, setRequiredQuantity] = useState(10);
+  const [requiredQuantity, setRequiredQuantity] = useState(25);
+  const [requiredTime, setRequiredTime] = useState(60);
   
   const [userOrders, setUserOrders] = useState<any[]>([]);
   const [allLiveCampaigns, setAllLiveCampaigns] = useState<any[]>([]);
@@ -47,7 +47,6 @@ export default function Home() {
 
   const [showVipModal, setShowVipModal] = useState(false);
   const [showBuyPointsModal, setShowBuyPointsModal] = useState(false);
-  const [showDailyBonusModal, setShowDailyBonusModal] = useState(false);
 
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
@@ -115,7 +114,6 @@ export default function Home() {
               const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
               if (diffDays > 1) {
-                // Streak broken! Reset to Day 1
                 setStreakDay(1);
                 await setDoc(userRef, { streakDay: 1 }, { merge: true });
               }
@@ -226,9 +224,15 @@ export default function Home() {
     });
   };
 
+  // Exact Cost matching screenshots logic
   const getCampaignCost = () => {
-    const costPerUnit = 10; // 10 coins per view/like/subscriber
-    return requiredQuantity * costPerUnit;
+    let baseRate = 10;
+    if (campaignType === "View") baseRate = 60; // Matching screenshot 1500 for 25 views (~60 per view with time factor)
+    else if (campaignType === "Subscribe") baseRate = 260; // Matching screenshot 2600 for 10 subs
+    else if (campaignType === "Like") baseRate = 220; // Matching screenshot 2200 for 10 likes
+
+    const timeMultiplier = requiredTime / 60;
+    return Math.round(requiredQuantity * baseRate * timeMultiplier);
   };
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
@@ -249,19 +253,18 @@ export default function Home() {
 
       await addDoc(collection(db, "orders"), {
         userId: user.uid,
-        platform,
-        actionType,
+        platform: "YouTube",
+        actionType: campaignType,
         link: campaignLink,
         quantity: requiredQuantity,
+        time: requiredTime,
         totalCost,
-        title: `${platform} - ${actionType} (${requiredQuantity} Qty)`,
+        title: `YouTube - ${campaignType} (${requiredQuantity} Qty, ${requiredTime}s)`,
         status: "Active (Live)",
         createdAt: new Date().toISOString()
       });
       alert("Campaign Created Successfully & Now Live!");
       setCampaignLink("");
-      setRequiredQuantity(10);
-      setBottomTab("watch");
     } catch (error) {
       alert("Error adding campaign.");
     }
@@ -308,93 +311,68 @@ export default function Home() {
     setWithdrawAmount(""); setWithdrawAccount("");
   };
 
-  const getMediaThumbnail = (url: string, plat: string) => {
+  const getMediaThumbnail = (url: string) => {
     if (!url) return null;
-    if (plat === "YouTube") {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-      const match = url.match(regExp);
-      return (match && match[2].length === 11) ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
-    }
-    return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? `https://img.youtube.com/vi/${match[2]}/hqdefault.jpg` : null;
   };
 
-  if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading App...</p></main>;
+  if (loading) return <main className="h-screen bg-white flex items-center justify-center"><p className="text-black font-bold animate-pulse">Loading App...</p></main>;
 
   if (!user) {
     return (
-      <main className="h-screen bg-[#0a0a0a] text-white flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm bg-[#111] border border-[#222] p-6 rounded-3xl text-center space-y-6">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto">yt</div>
+      <main className="h-screen bg-white text-black flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-gray-50 border border-gray-200 p-6 rounded-3xl text-center space-y-6 shadow-lg">
+          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center font-bold text-2xl text-white mx-auto">yt</div>
           <h1 className="text-2xl font-bold">ytLove</h1>
-          <button onClick={() => signInWithPopup(auth, googleProvider)} className="w-full bg-white text-black font-bold py-3.5 rounded-xl">Continue with Google</button>
+          <button onClick={() => signInWithPopup(auth, googleProvider)} className="w-full bg-black text-white font-bold py-3.5 rounded-xl">Continue with Google</button>
         </div>
       </main>
     );
   }
 
   const referralLink = `https://${typeof window !== "undefined" ? window.location.host : "ytlove.vercel.app"}?ref=${user.uid}`;
-
-  const getAvailableCategories = () => {
-    if (platform === "YouTube") return ["Views", "Like", "Subscribe"];
-    return ["Views", "Like", "Follow"];
-  };
-
-  const filteredCampaigns = allLiveCampaigns.filter(c => (c.platform || "YouTube") === platform && (c.actionType || "Views") === watchCategory);
+  const filteredCampaigns = allLiveCampaigns.filter(c => (c.actionType || "View") === campaignType);
   const activeCampaignToShow = filteredCampaigns.length > 0 ? filteredCampaigns[currentCampaignIndex % filteredCampaigns.length] : null;
-  const mediaThumbnail = activeCampaignToShow ? getMediaThumbnail(activeCampaignToShow.link, activeCampaignToShow.platform || platform) : null;
+  const mediaThumbnail = activeCampaignToShow ? getMediaThumbnail(activeCampaignToShow.link) : null;
 
   return (
-    <main className="h-screen w-full max-w-md mx-auto bg-[#0a0a0a] text-white flex flex-col relative overflow-hidden shadow-2xl">
+    <main className="h-screen w-full max-w-md mx-auto bg-white text-black flex flex-col relative overflow-hidden shadow-2xl">
       
       {/* HEADER */}
-      <div className="bg-[#111] p-3 flex justify-between items-center z-30 border-b border-[#222] shrink-0">
+      <div className="bg-white p-3 flex justify-between items-center z-30 border-b border-gray-100 shrink-0">
         <div className="flex items-center space-x-2">
-          <button onClick={() => setIsSidebarOpen(true)} className="text-lg font-bold p-1">☰</button>
-          <div className="w-5 h-5 bg-red-600 rounded flex items-center justify-center text-[9px] font-bold">yt</div>
-          <span className="font-bold text-sm">ytLove</span>
+          <button onClick={() => setIsSidebarOpen(true)} className="text-xl font-bold p-1">☰</button>
+          <span className="font-bold text-base">Create Campaign</span>
         </div>
-        <div className="flex items-center space-x-2 text-xs font-bold">
-          <div className="bg-[#222] px-2.5 py-0.5 rounded-full flex items-center space-x-1">
-            <span className="text-red-500">❤️</span><span>{coins}</span>
-          </div>
-          <div onClick={() => setBottomTab("wallet")} className="bg-emerald-900/40 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full cursor-pointer flex items-center">
-            <span>₹{walletINR}</span>
-          </div>
+        <div className="flex items-center space-x-1.5 font-bold text-sm bg-gray-100 px-3 py-1 rounded-full">
+          <span className="text-black">{coins}</span>
+          <span className="text-red-600">❤️</span>
         </div>
-      </div>
-
-      {/* PROMO BANNER */}
-      <div className="bg-gradient-to-r from-amber-600 via-red-600 to-pink-600 px-3 py-1 flex justify-between items-center z-25 shrink-0 text-[10px] font-bold">
-        <div className="flex items-center space-x-1 truncate">
-          <span>🎉</span>
-          <span className="truncate">First 100 Users Offer: Get Bonus Points!</span>
-        </div>
-        <button onClick={() => setShowBuyPointsModal(true)} className="bg-black/40 text-white px-2 py-0.5 rounded-full text-[9px] shrink-0 border border-white/20">
-          🎁 Claim
-        </button>
       </div>
 
       {/* SIDEBAR WITH 7-DAY STREAK DAILY BONUS */}
       {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex">
-          <div className="w-4/5 max-w-xs bg-[#111] h-full p-5 flex flex-col justify-between">
+        <div className="fixed inset-0 bg-black/60 z-50 flex">
+          <div className="w-4/5 max-w-xs bg-white h-full p-5 flex flex-col justify-between shadow-2xl">
             <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-[#222] pb-2">
+              <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                 <span className="font-bold text-sm">Menu & Rewards</span>
                 <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
               </div>
 
               {/* Daily Bonus Card in Sidebar */}
-              <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
+              <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-amber-400">🎁 Daily Streak Bonus</span>
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">Day {streakDay}/7</span>
+                  <span className="text-xs font-bold text-amber-600">🎁 Daily Streak Bonus</span>
+                  <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Day {streakDay}/7</span>
                 </div>
-                <p className="text-[10px] text-gray-400">Login & claim daily. If you miss a day, streak resets to Day 1!</p>
+                <p className="text-[10px] text-gray-500">Login daily. Missing a day resets streak to Day 1!</p>
                 
                 <div className="grid grid-cols-4 gap-1 pt-1">
                   {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                    <div key={d} className={`p-1.5 rounded-lg text-center text-[9px] font-bold border ${d === streakDay ? 'bg-amber-600 border-amber-400 text-white animate-pulse' : d < streakDay ? 'bg-green-900/40 border-green-700 text-green-300' : 'bg-[#222] border-[#333] text-gray-500'}`}>
+                    <div key={d} className={`p-1.5 rounded-lg text-center text-[9px] font-bold border ${d === streakDay ? 'bg-amber-500 border-amber-600 text-white animate-pulse' : d < streakDay ? 'bg-green-100 border-green-300 text-green-800' : 'bg-gray-100 border-gray-200 text-gray-400'}`}>
                       D{d} <br/> {d === 7 ? '600c' : `${d * 50}c`}
                     </div>
                   ))}
@@ -403,19 +381,19 @@ export default function Home() {
                 <button 
                   onClick={handleClaimDailyBonus} 
                   disabled={hasClaimedToday}
-                  className={`w-full py-2 rounded-xl text-xs font-bold mt-2 ${hasClaimedToday ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-red-600 text-white'}`}
+                  className={`w-full py-2 rounded-xl text-xs font-bold mt-2 ${hasClaimedToday ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500 to-red-600 text-white'}`}
                 >
-                  {hasClaimedToday ? "Already Claimed Today ✅" : `Claim Day ${streakDay} Reward`}
+                  {hasClaimedToday ? "Claimed Today ✅" : `Claim Day ${streakDay} Reward`}
                 </button>
               </div>
 
               <div className="space-y-2 text-sm pt-2">
-                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Buy Points</button>
-                <button onClick={() => { setShowVipModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs text-amber-400">VIP Member</button>
-                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Refer & Earn</button>
+                <button onClick={() => { setShowBuyPointsModal(true); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-gray-50 rounded-xl text-xs font-semibold">Buy Points</button>
+                <button onClick={() => { setBottomTab("wallet"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-gray-50 rounded-xl text-xs font-semibold">Wallet (INR / USDT)</button>
+                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-gray-50 rounded-xl text-xs font-semibold">Refer & Earn</button>
               </div>
             </div>
-            <div className="text-center text-[10px] text-gray-500 pb-2">ytLove v2.4 Safe Build</div>
+            <div className="text-center text-[10px] text-gray-400 pb-2">ytLove v2.5 Safe Build</div>
           </div>
           <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
         </div>
@@ -427,37 +405,15 @@ export default function Home() {
         {/* WATCH SECTION */}
         {bottomTab === "watch" && (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-1.5 bg-[#111] p-1 rounded-xl border border-[#222]">
-              {(["YouTube", "Facebook", "Instagram"] as const).map((p) => (
-                <button key={p} onClick={() => { 
-                  setPlatform(p); 
-                  setCurrentCampaignIndex(0); 
-                  if (p === "YouTube" && watchCategory === "Follow") setWatchCategory("Views"); 
-                  if (p !== "YouTube" && watchCategory === "Subscribe") setWatchCategory("Views"); 
-                }} className={`py-1.5 text-xs font-bold rounded-lg ${platform === p ? "bg-red-600 text-white" : "text-gray-400"}`}>{p}</button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-1 bg-[#111] p-1 rounded-xl border border-[#222]">
-              {getAvailableCategories().map((cat: any) => (
-                <button key={cat} onClick={() => { setWatchCategory(cat); setCurrentCampaignIndex(0); }} className={`py-1.5 text-[10px] font-bold rounded-lg ${watchCategory === cat ? "bg-emerald-600 text-white" : "text-gray-400"}`}>
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* MEDIA PREVIEW CARD */}
-            <div className="bg-[#111] border border-[#222] rounded-2xl overflow-hidden shadow-xl flex flex-col">
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl overflow-hidden shadow-md flex flex-col">
               <div className="w-full h-48 bg-black relative flex items-center justify-center overflow-hidden">
                 {activeCampaignToShow ? (
                   <>
                     {mediaThumbnail ? (
                       <img src={mediaThumbnail} alt="Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-60" />
                     ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-purple-950 to-black flex items-center justify-center">
-                        <span className="text-4xl">
-                          {activeCampaignToShow.platform === "Facebook" ? "📘" : activeCampaignToShow.platform === "Instagram" ? "📸" : "▶️"}
-                        </span>
+                      <div className="absolute inset-0 bg-gradient-to-br from-red-900 to-black flex items-center justify-center">
+                        <span className="text-4xl text-white">▶️</span>
                       </div>
                     )}
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-black/40 text-center">
@@ -465,150 +421,242 @@ export default function Home() {
                         ▶
                       </button>
                       <a href={activeCampaignToShow?.link} target="_blank" rel="noopener noreferrer" className="text-xs text-white font-bold underline bg-black/60 px-2 py-1 rounded-lg">
-                        Open & View on {activeCampaignToShow.platform || platform}
+                        Open & View Video
                       </a>
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs text-gray-500 text-center p-4">No live campaigns found for {platform} - {watchCategory}</p>
+                  <p className="text-xs text-gray-400 text-center p-4">No live watch campaigns available right now.</p>
                 )}
               </div>
               
-              <div className="p-3 flex justify-around items-center border-t border-[#222]">
+              <div className="p-3 flex justify-around items-center border-t border-gray-200 bg-white">
                 <div className="flex items-center space-x-1.5">
                   <span className="text-red-500 text-lg">❤️</span>
                   <div>
                     <p className="text-sm font-bold">{rewardCoins}</p>
-                    <p className="text-[9px] text-gray-400">Points</p>
+                    <p className="text-[9px] text-gray-500">Points</p>
                   </div>
                 </div>
-                <div className="h-6 w-[1px] bg-[#333]"></div>
+                <div className="h-6 w-[1px] bg-gray-200"></div>
                 <div className="flex items-center space-x-1.5">
-                  <span className="text-gray-300 text-lg">⏱️</span>
+                  <span className="text-gray-600 text-lg">⏱️</span>
                   <div>
                     <p className="text-sm font-bold">{timer}</p>
-                    <p className="text-[9px] text-gray-400">Seconds</p>
+                    <p className="text-[9px] text-gray-500">Seconds</p>
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-[#161616]">
-                <button onClick={handleSkipCampaign} className="w-full bg-[#222] hover:bg-[#333] text-white font-bold py-2.5 rounded-xl text-xs">
-                  Change
+              <div className="p-3 bg-gray-50">
+                <button onClick={handleSkipCampaign} className="w-full bg-gray-200 hover:bg-gray-300 text-black font-bold py-2.5 rounded-xl text-xs">
+                  Next Video
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* CAMPAIGN SECTION WITH PRICE & QUANTITY PREVIEW */}
+        {/* CAMPAIGN SECTION - MATCHING SCREENSHOTS EXACTLY */}
         {bottomTab === "campaign" && (
-          <form onSubmit={handleCreateCampaign} className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3">
-            <h2 className="text-xs font-bold uppercase">Create Live Campaign</h2>
-            <div className="grid grid-cols-3 gap-1 bg-[#222] p-1 rounded-xl">
-              {(["YouTube", "Facebook", "Instagram"] as const).map((p) => (
-                <button key={p} type="button" onClick={() => setPlatform(p)} className={`py-1 text-[10px] font-bold rounded-lg ${platform === p ? "bg-red-600 text-white" : "text-gray-400"}`}>{p}</button>
-              ))}
-            </div>
+          <div className="space-y-3">
             
-            <div className="grid grid-cols-3 gap-1 bg-[#222] p-1 rounded-xl">
-              {getAvailableCategories().map((act: any) => (
-                <button key={act} type="button" onClick={() => setActionType(act)} className={`py-1 text-[9px] font-bold rounded-lg ${actionType === act ? "bg-green-600 text-white" : "text-gray-400"}`}>{act}</button>
-              ))}
+            {/* BLACK INSTRUCTION BOX */}
+            <div className="bg-black text-white p-3 rounded-2xl text-[10px] space-y-1.5 shadow-md">
+              <p>• Do not create multiple campaigns for the same video.</p>
+              <p>• It may take up to 72 hours for campaigns to be reflected on YT.</p>
+              <p>• Campaigns violating the policy will be deleted.</p>
+              <p>• Use the YT Studio app for detailed analysis.</p>
+              <p>• The completion time of campaigns may vary.</p>
             </div>
 
-            <input type="url" required value={campaignLink} onChange={(e) => setCampaignLink(e.target.value)} placeholder="Paste Link..." className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white" />
-            
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-400">Quantity ({actionType}):</label>
-              <input type="number" min="10" value={requiredQuantity} onChange={(e) => setRequiredQuantity(Number(e.target.value))} className="w-full bg-[#222] border border-[#333] rounded-xl p-2.5 text-xs text-white" />
+            {/* UNITY BANNER AD BOX */}
+            <div className="bg-gradient-to-r from-red-950 via-black to-red-950 border border-red-900/50 p-2 rounded-xl text-center">
+              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Unity Banner Ad</p>
+              <div className="flex justify-between items-center px-2 py-1">
+                <span className="text-xs font-bold text-amber-400">Withdrawable ₹0</span>
+                <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded font-bold">Claim</span>
+                <span className="text-xs text-gray-300">Detail</span>
+              </div>
             </div>
 
-            {/* Price Preview Banner */}
-            <div className="bg-emerald-950/40 border border-emerald-800 p-2.5 rounded-xl flex justify-between items-center text-xs">
-              <span className="text-gray-300 font-bold">Total Cost:</span>
-              <span className="text-emerald-400 font-bold">❤️ {getCampaignCost()} Coins</span>
+            {/* HELPER BOX */}
+            <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center font-bold text-gray-600 text-sm">?</div>
+              <p className="text-[11px] text-gray-600 leading-tight">To get the video link: Open your video on YT → Share → Copy Link</p>
             </div>
 
-            <button type="submit" className="w-full bg-red-600 font-bold py-2.5 rounded-xl text-xs">Launch Live Campaign</button>
-          </form>
+            {/* FORM */}
+            <form onSubmit={handleCreateCampaign} className="bg-white border border-gray-200 p-4 rounded-2xl space-y-4 shadow-sm">
+              
+              {/* Video Link Input */}
+              <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl overflow-hidden px-3 py-1">
+                <input 
+                  type="url" 
+                  required 
+                  value={campaignLink} 
+                  onChange={(e) => setCampaignLink(e.target.value)} 
+                  placeholder="Video Link Address" 
+                  className="w-full bg-transparent text-xs text-black outline-none py-2" 
+                />
+                <span className="text-red-600 text-lg px-2">▶</span>
+                <button type="button" className="bg-red-600 text-white text-xs font-bold px-4 py-1.5 rounded-lg">Add</button>
+              </div>
+
+              {/* TABS: View, Subscribe, Like */}
+              <div className="grid grid-cols-3 gap-1 bg-gray-100 p-1 rounded-xl">
+                {(["View", "Subscribe", "Like"] as const).map((tab) => (
+                  <button 
+                    key={tab} 
+                    type="button" 
+                    onClick={() => setCampaignType(tab)} 
+                    className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center space-x-1 ${campaignType === tab ? "bg-red-600 text-white shadow-md" : "text-gray-600 hover:bg-gray-200"}`}
+                  >
+                    <span>{tab === "View" ? "👁️" : tab === "Subscribe" ? "🔔" : "👍"}</span>
+                    <span>{tab}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Campaign Settings Header */}
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="flex-shrink mx-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Campaign Settings</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              {/* Quantity Selector */}
+              <div className="flex justify-between items-center bg-gray-50 border border-gray-200 p-3 rounded-xl">
+                <span className="text-xs font-bold text-gray-700">Number of {campaignType === "View" ? "Views" : campaignType === "Subscribe" ? "Subscribers" : "Likes"}</span>
+                <select 
+                  value={requiredQuantity} 
+                  onChange={(e) => setRequiredQuantity(Number(e.target.value))}
+                  className="bg-white border border-gray-300 text-black text-xs font-bold px-3 py-1.5 rounded-lg outline-none"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                  <option value={200}>200</option>
+                </select>
+              </div>
+
+              {/* Required Time Selector with 90, 120, 180, 240, 300 sec */}
+              <div className="flex justify-between items-center bg-gray-50 border border-gray-200 p-3 rounded-xl">
+                <span className="text-xs font-bold text-gray-700">Required Time (sec.)</span>
+                <select 
+                  value={requiredTime} 
+                  onChange={(e) => setRequiredTime(Number(e.target.value))}
+                  className="bg-white border border-gray-300 text-black text-xs font-bold px-3 py-1.5 rounded-lg outline-none"
+                >
+                  <option value={60}>60</option>
+                  <option value={90}>90</option>
+                  <option value={120}>120</option>
+                  <option value={180}>180</option>
+                  <option value={240}>240</option>
+                  <option value={300}>300</option>
+                </select>
+              </div>
+
+              {/* Campaign Cost Header */}
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="flex-shrink mx-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Campaign Cost</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              {/* Total Cost Display */}
+              <div className="flex justify-between items-center px-1">
+                <span className="text-xs font-bold text-gray-600">Total Cost</span>
+                <div className="flex items-center space-x-1.5 font-bold text-lg">
+                  <span className="text-red-600">{getCampaignCost()}</span>
+                  <span className="text-red-600">❤️</span>
+                </div>
+              </div>
+
+              {/* Create Button */}
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl text-sm shadow-lg transition">
+                Create
+              </button>
+
+            </form>
+          </div>
         )}
 
-        {/* WALLET SECTION WITH BALANCE & BEP20 USDT WARNING */}
+        {/* WALLET SECTION */}
         {bottomTab === "wallet" && (
-          <div className="bg-[#111] border border-[#222] p-4 rounded-2xl space-y-3">
+          <div className="bg-gray-50 border border-gray-200 p-4 rounded-2xl space-y-3 shadow-sm">
             
-            {/* Balance Card at Top of Wallet */}
-            <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-xl flex justify-around items-center text-center">
+            <div className="bg-white border border-gray-200 p-3 rounded-xl flex justify-around items-center text-center shadow-sm">
               <div>
-                <p className="text-[9px] text-gray-400">Coins Balance</p>
-                <p className="text-sm font-bold text-red-500">❤️ {coins}</p>
+                <p className="text-[9px] text-gray-500">Coins Balance</p>
+                <p className="text-sm font-bold text-red-600">❤️ {coins}</p>
               </div>
-              <div className="h-6 w-[1px] bg-[#333]"></div>
+              <div className="h-6 w-[1px] bg-gray-200"></div>
               <div>
-                <p className="text-[9px] text-gray-400">INR Wallet</p>
-                <p className="text-sm font-bold text-emerald-400">₹{walletINR}</p>
+                <p className="text-[9px] text-gray-500">INR Wallet</p>
+                <p className="text-sm font-bold text-emerald-600">₹{walletINR}</p>
               </div>
             </div>
 
-            <div className="flex bg-[#222] rounded-xl p-1 gap-1">
-              <button onClick={() => setWalletTab("Add Fund")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Add Fund" ? "bg-green-600 text-white" : "text-gray-400"}`}>Add Fund</button>
-              <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-400"}`}>Withdraw</button>
+            <div className="flex bg-gray-200 rounded-xl p-1 gap-1">
+              <button onClick={() => setWalletTab("Add Fund")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Add Fund" ? "bg-green-600 text-white" : "text-gray-600"}`}>Add Fund</button>
+              <button onClick={() => setWalletTab("Withdraw")} className={`flex-1 py-1.5 text-xs font-bold rounded-lg ${walletTab === "Withdraw" ? "bg-red-600 text-white" : "text-gray-600"}`}>Withdraw</button>
             </div>
             
             {walletTab === "Add Fund" ? (
               <div className="space-y-3">
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "UPI" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>🇮🇳 UPI (INR)</button>
-                  <button type="button" onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "Crypto" ? "bg-amber-600 border-amber-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>🌐 Crypto (USDT)</button>
+                  <button type="button" onClick={() => setPaymentMethod("UPI")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "UPI" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white border-gray-300 text-gray-700"}`}>🇮🇳 UPI (INR)</button>
+                  <button type="button" onClick={() => setPaymentMethod("Crypto")} className={`flex-1 py-2 text-xs font-bold rounded-xl border ${paymentMethod === "Crypto" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-700"}`}>🌐 Crypto (USDT)</button>
                 </div>
 
-                <div className="bg-[#181818] p-3 rounded-2xl border border-[#2a2a2a] text-center space-y-2">
+                <div className="bg-white p-3 rounded-2xl border border-gray-200 text-center space-y-2">
                   {paymentMethod === "UPI" ? (
                     <>
-                      <div className="w-32 h-32 bg-white mx-auto p-2 rounded-xl flex items-center justify-center">
+                      <div className="w-32 h-32 bg-gray-100 mx-auto p-2 rounded-xl flex items-center justify-center">
                         <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=${UPI_ID}&pn=ytLove`} alt="UPI QR" className="w-full h-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-gray-400">Scan via GPay / PhonePe / Paytm</p>
-                      <p className="text-xs font-mono font-bold text-emerald-400 select-all">{UPI_ID}</p>
+                      <p className="text-[10px] text-gray-500">Scan via GPay / PhonePe / Paytm</p>
+                      <p className="text-xs font-mono font-bold text-emerald-600 select-all">{UPI_ID}</p>
                     </>
                   ) : (
                     <>
-                      <div className="w-32 h-32 bg-white mx-auto p-2 rounded-xl flex items-center justify-center">
+                      <div className="w-32 h-32 bg-gray-100 mx-auto p-2 rounded-xl flex items-center justify-center">
                         <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${CRYPTO_BEP20_ADDRESS}`} alt="Crypto QR" className="w-full h-full object-contain" />
                       </div>
-                      <p className="text-[10px] text-amber-400 font-bold">BEP20 Network Only (USDT/BNB)</p>
-                      <p className="text-[10px] font-mono font-bold text-gray-300 break-all select-all">{CRYPTO_BEP20_ADDRESS}</p>
+                      <p className="text-[10px] text-amber-600 font-bold">BEP20 Network Only (USDT/BNB)</p>
+                      <p className="text-[10px] font-mono font-bold text-gray-700 break-all select-all">{CRYPTO_BEP20_ADDRESS}</p>
                     </>
                   )}
                 </div>
 
                 <form onSubmit={handleAddFundSubmit} className="space-y-2">
-                  <input type="number" placeholder="Amount" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} required className="w-full bg-[#222] border border-[#333] p-2.5 text-xs rounded-xl text-white" />
-                  <input type="text" placeholder={paymentMethod === "UPI" ? "12-Digit UTR / Ref Number" : "Transaction Hash / TXID"} value={fundReference} onChange={(e) => setFundReference(e.target.value)} required className="w-full bg-[#222] border border-[#333] p-2.5 text-xs rounded-xl text-white" />
-                  <button type="submit" className="w-full bg-green-600 py-2.5 rounded-xl text-xs font-bold">Submit Payment Proof</button>
+                  <input type="number" placeholder="Amount" value={fundAmount} onChange={(e) => setFundAmount(e.target.value)} required className="w-full bg-white border border-gray-300 p-2.5 text-xs rounded-xl text-black" />
+                  <input type="text" placeholder={paymentMethod === "UPI" ? "12-Digit UTR / Ref Number" : "Transaction Hash / TXID"} value={fundReference} onChange={(e) => setFundReference(e.target.value)} required className="w-full bg-white border border-gray-300 p-2.5 text-xs rounded-xl text-black" />
+                  <button type="submit" className="w-full bg-green-600 py-2.5 rounded-xl text-xs font-bold text-white">Submit Payment Proof</button>
                 </form>
               </div>
             ) : (
               <form onSubmit={handleWithdrawSubmit} className="space-y-3">
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setWithdrawCurrency("INR")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "INR" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>INR (Min ₹200)</button>
-                  <button type="button" onClick={() => setWithdrawCurrency("USDT")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "USDT" ? "bg-amber-600 border-amber-500 text-white" : "bg-[#222] border-[#333] text-gray-400"}`}>USDT (Min $2)</button>
+                  <button type="button" onClick={() => setWithdrawCurrency("INR")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "INR" ? "bg-indigo-600 border-indigo-500 text-white" : "bg-white border-gray-300 text-gray-700"}`}>INR (Min ₹200)</button>
+                  <button type="button" onClick={() => setWithdrawCurrency("USDT")} className={`flex-1 py-1.5 text-xs font-bold rounded-xl border ${withdrawCurrency === "USDT" ? "bg-amber-600 border-amber-500 text-white" : "bg-white border-gray-300 text-gray-700"}`}>USDT (Min $2)</button>
                 </div>
 
-                <input type="number" placeholder={withdrawCurrency === "USDT" ? "Withdrawal Amount ($)" : "Withdrawal Amount (₹)"} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} required className="w-full bg-[#222] p-2.5 text-xs rounded-xl text-white border border-[#333]" />
+                <input type="number" placeholder={withdrawCurrency === "USDT" ? "Withdrawal Amount ($)" : "Withdrawal Amount (₹)"} value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} required className="w-full bg-white p-2.5 text-xs rounded-xl text-black border border-gray-300" />
                 
                 <div className="space-y-1">
-                  <input type="text" placeholder={withdrawCurrency === "USDT" ? "Enter BEP20 Wallet Address" : "Enter UPI ID / Bank Details"} value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} required className="w-full bg-[#222] p-2.5 text-xs rounded-xl text-white border border-[#333]" />
+                  <input type="text" placeholder={withdrawCurrency === "USDT" ? "Enter BEP20 Wallet Address" : "Enter UPI ID / Bank Details"} value={withdrawAccount} onChange={(e) => setWithdrawAccount(e.target.value)} required className="w-full bg-white p-2.5 text-xs rounded-xl text-black border border-gray-300" />
                   {withdrawCurrency === "USDT" && (
-                    <p className="text-[10px] text-amber-400 font-bold px-1">⚠️ Please enter valid BEP20 Address only ($2 min)</p>
+                    <p className="text-[10px] text-amber-600 font-bold px-1">⚠️ BEP20 Address Only ($2 minimum)</p>
                   )}
                   {withdrawCurrency === "INR" && (
-                    <p className="text-[10px] text-gray-400 px-1">Minimum withdrawal: ₹200</p>
+                    <p className="text-[10px] text-gray-500 px-1">Minimum withdrawal: ₹200</p>
                   )}
                 </div>
 
-                <button type="submit" className="w-full bg-red-600 py-2.5 rounded-xl text-xs font-bold">Request Withdrawal</button>
+                <button type="submit" className="w-full bg-red-600 py-2.5 rounded-xl text-xs font-bold text-white">Request Withdrawal</button>
               </form>
             )}
           </div>
@@ -616,63 +664,40 @@ export default function Home() {
 
         {/* REFER SECTION */}
         {bottomTab === "refer" && (
-          <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-3">
+          <div className="bg-gray-50 border border-gray-200 p-4 rounded-2xl text-center space-y-3">
             <h2 className="text-xs font-bold uppercase">Refer & Earn ₹10</h2>
-            <div className="bg-[#222] p-2.5 rounded-xl text-[10px] font-mono break-all text-amber-400">{referralLink}</div>
-            <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("Link Copied!"); }} className="w-full bg-green-600 font-bold py-2 rounded-xl text-xs">Copy Referral Link</button>
+            <div className="bg-white border border-gray-200 p-2.5 rounded-xl text-[10px] font-mono break-all text-amber-600">{referralLink}</div>
+            <button onClick={() => { navigator.clipboard.writeText(referralLink); alert("Link Copied!"); }} className="w-full bg-green-600 font-bold py-2 rounded-xl text-xs text-white">Copy Referral Link</button>
           </div>
         )}
 
         {/* PROFILE SECTION */}
         {bottomTab === "profile" && (
           <div className="space-y-3">
-            <div className="bg-[#111] p-4 rounded-2xl text-center space-y-2">
-              <h2 className="font-bold text-sm">{user.displayName || "User"}</h2>
-              <button onClick={() => signOut(auth)} className="bg-red-600 px-4 py-1.5 rounded-xl text-[10px] font-bold">Logout</button>
+            <div className="bg-gray-50 border border-gray-200 p-4 rounded-2xl text-center space-y-2">
+              <h2 className="font-bold text-sm text-black">{user.displayName || "User"}</h2>
+              <button onClick={() => signOut(auth)} className="bg-red-600 text-white px-4 py-1.5 rounded-xl text-[10px] font-bold">Logout</button>
             </div>
-            <div className="bg-[#111] p-3 rounded-2xl space-y-2">
-              <h3 className="font-bold text-[11px]">Order History</h3>
-              {userOrders.map((ord) => {
-                const statusText = ord.status || "";
-                const isPending = statusText.toLowerCase().includes("pending") || statusText.toLowerCase().includes("processing");
-                const isLive = statusText.toLowerCase().includes("active");
-                const isRejected = statusText.toLowerCase().includes("reject") || statusText.toLowerCase().includes("cancel");
-
-                const statusColorClass = isPending 
-                  ? "text-blue-400" 
-                  : isLive 
-                  ? "text-emerald-400" 
-                  : isRejected 
-                  ? "text-red-500" 
-                  : "text-gray-400";
-
-                return (
-                  <div key={ord.id} className="bg-[#222] p-2 rounded-xl flex justify-between text-[10px] items-center">
-                    <span>{ord.title}</span>
-                    <span className={`font-bold ${statusColorClass}`}>{ord.status}</span>
-                  </div>
-                );
-              })}
+            <div className="bg-gray-50 border border-gray-200 p-3 rounded-2xl space-y-2">
+              <h3 className="font-bold text-[11px] text-gray-700">Order History</h3>
+              {userOrders.map((ord) => (
+                <div key={ord.id} className="bg-white border border-gray-200 p-2.5 rounded-xl flex justify-between text-[10px] items-center">
+                  <span className="text-black">{ord.title}</span>
+                  <span className="font-bold text-emerald-600">{ord.status}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </div>
 
-      {/* FIXED BANNER */}
-      <div className="w-full bg-[#1a1a1a] border-t border-[#333] p-0.5 text-center absolute bottom-[52px] left-0 right-0 z-30">
-        <p className="text-[7px] text-gray-500 uppercase">Unity Banner Ad</p>
-        <div className="w-full h-7 bg-black/50 border border-gray-700/50 rounded flex items-center justify-center">
-          <span className="text-[9px] text-gray-400">Banner Connected</span>
-        </div>
-      </div>
-
       {/* NAVIGATION BAR */}
-      <div className="absolute bottom-0 left-0 right-0 bg-[#111] border-t border-[#222] flex justify-around py-2 z-40 text-gray-400">
-        <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "watch" ? "text-red-500" : ""}`}><span>📺</span><span>Watch</span></button>
-        <button onClick={() => setBottomTab("campaign")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "campaign" ? "text-red-500" : ""}`}><span>🚀</span><span>Campaign</span></button>
-        <button onClick={() => setBottomTab("wallet")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "wallet" ? "text-red-500" : ""}`}><span>💼</span><span>Wallet</span></button>
-        <button onClick={() => setBottomTab("refer")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "refer" ? "text-red-500" : ""}`}><span>🎁</span><span>Refer</span></button>
-        <button onClick={() => setBottomTab("profile")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "profile" ? "text-red-500" : ""}`}><span>👤</span><span>Profile</span></button>
+      <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around py-2.5 z-40 text-gray-500 shadow-lg">
+        <button onClick={() => setBottomTab("watch")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "watch" ? "text-red-600" : ""}`}><span>📺</span><span>Watch</span></button>
+        <button onClick={() => setBottomTab("campaign")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "campaign" ? "text-red-600" : ""}`}><span>🚀</span><span>Campaign</span></button>
+        <button onClick={() => setBottomTab("wallet")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "wallet" ? "text-red-600" : ""}`}><span>💼</span><span>Wallet</span></button>
+        <button onClick={() => setBottomTab("refer")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "refer" ? "text-red-600" : ""}`}><span>🎁</span><span>Refer</span></button>
+        <button onClick={() => setBottomTab("profile")} className={`flex flex-col items-center text-[9px] font-bold ${bottomTab === "profile" ? "text-red-600" : ""}`}><span>👤</span><span>Profile</span></button>
       </div>
     </main>
   );
