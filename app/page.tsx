@@ -240,7 +240,6 @@ export default function Home() {
             const signupBonusINR = isFirst100 ? 20 : 0;
             const generatedCode = generateCustomReferralCode();
 
-            // FIXED: Set initial coins strictly to 0
             await setDoc(userRef, { 
               email: currentUser.email, 
               coins: 0, 
@@ -1020,14 +1019,15 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
                   
+                  {/* Dynamic QR Code Generator API for UPI and Crypto */}
                   <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md">
                     <img 
                       src={
                         paymentMethod === "UPI" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=${UPI_ID}&pn=SocialBoost` 
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}`
                           : paymentMethod === "BEP20" 
-                          ? "/bep20-qr.png" 
-                          : "/trc20-qr.png"
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(BEP20_ADDRESS)}`
+                          : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(TRC20_ADDRESS)}`
                       } 
                       alt={`${paymentMethod} QR Code`} 
                       className="w-full h-full object-contain"
