@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { auth, db } from "@/firebase";
+import { auth, googleProvider, db } from "@/firebase";
 import { 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
   onAuthStateChanged, 
   signOut, 
   createUserWithEmailAndPassword,
@@ -22,7 +25,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Email & Forgot Password Auth States
+  // Auth States
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -87,6 +90,20 @@ export default function Home() {
     return `${randomLetter}${randomNumbers}`;
   };
 
+  const handleGoogleLogin = async () => {
+    setAuthError(""); setAuthSuccess("");
+    try {
+      googleProvider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, googleProvider);
+    } catch (error: any) {
+      try {
+        await signInWithRedirect(auth, googleProvider);
+      } catch (err: any) {
+        setAuthError("Google Sign-In failed. Please use Email Sign-In.");
+      }
+    }
+  };
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(""); setAuthSuccess("");
@@ -115,12 +132,14 @@ export default function Home() {
         await signInWithEmailAndPassword(auth, cleanEmail, password);
       }
     } catch (err: any) {
-      if (err.code === "auth/invalid-email") {
+      if (err.code === "auth/operation-not-allowed") {
+        setAuthError("Email/Password Sign-In is disabled in Firebase Console. Please enable it in Firebase -> Authentication -> Sign-in method.");
+      } else if (err.code === "auth/invalid-email") {
         setAuthError("Invalid email format.");
       } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
         setAuthError("Incorrect Email or Password.");
       } else if (err.code === "auth/email-already-in-use") {
-        setAuthError("Email already registered! Please Sign In.");
+        setAuthError("Email already registered! Click 'Already have an account? Sign In'.");
       } else {
         setAuthError(err.message || "Authentication Failed");
       }
@@ -169,6 +188,16 @@ export default function Home() {
   };
 
   useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          setUser(result.user);
+        }
+      })
+      .catch((err) => {
+        console.error("Redirect Login Error:", err);
+      });
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       try {
@@ -559,7 +588,7 @@ export default function Home() {
             <p className="text-xs text-green-400 text-center bg-green-950/60 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
           )}
 
-          <form onSubmit={handleEmailAuth} className="bg-[#111]/90 border border-[#333] p-5 rounded-2xl space-y-3.5 backdrop-blur-md shadow-2xl">
+          <form onSubmit={handleEmailAuth} className="bg-[#111]/95 border border-[#333] p-5 rounded-2xl space-y-3.5 backdrop-blur-md shadow-2xl">
             <div className="flex justify-between items-center border-b border-[#333] pb-2">
               <span className="text-sm font-bold text-amber-400">
                 {isForgotPassword ? "Reset Password" : isSignUp ? "Create New Account" : "Sign In to Account"}
@@ -601,6 +630,20 @@ export default function Home() {
             <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl text-xs shadow-lg transition">
               {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Login"}
             </button>
+
+            {/* Google Sign-In Active & Clickable */}
+            {!isForgotPassword && (
+              <div className="pt-2 border-t border-[#222]">
+                <button 
+                  type="button"
+                  onClick={handleGoogleLogin} 
+                  className="w-full bg-white py-3 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
+                >
+                  <span className="text-base font-bold text-red-600">G</span>
+                  <span>Continue with Google</span>
+                </button>
+              </div>
+            )}
 
             <div className="flex justify-between text-[11px] text-gray-400 pt-1">
               {isForgotPassword ? (
