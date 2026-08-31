@@ -240,6 +240,7 @@ export default function Home() {
             const signupBonusINR = isFirst100 ? 20 : 0;
             const generatedCode = generateCustomReferralCode();
 
+            // FIXED: Initial Coins set to 0 instead of 500
             await setDoc(userRef, { 
               email: currentUser.email, 
               coins: 0, 
@@ -308,6 +309,7 @@ export default function Home() {
     }
   };
 
+  // FIXED: Apply Referral Code with Daily 10 Invites Limit per Referral User
   const handleApplyReferral = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || hasEnteredRef || !inputRefCode) return;
@@ -341,17 +343,20 @@ export default function Home() {
         currentDailyCount = 0;
       }
 
+      // Check 10 Limit per Day
       if (currentDailyCount >= 10) {
         alert("This user has reached the daily limit of 10 referrals for today. Please try another code.");
         return;
       }
 
+      // Update Referrer Balance and Count
       await updateDoc(refUserRef, { 
         referralEarnings: increment(10),
         dailyRefCount: currentDailyCount + 1,
         lastRefDate: todayStr
       });
 
+      // Update Current User State
       const currentUserRef = doc(db, "users", user.uid);
       await updateDoc(currentUserRef, {
         hasEnteredRef: true,
@@ -794,23 +799,10 @@ export default function Home() {
               </div>
 
               <div className="space-y-2 text-sm pt-2">
-                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium">🤝 Refer & Earn</button>
-                
-                {/* Developer Contact Us Link */}
-                <a 
-                  href="mailto:developerappwebsite@gmail.com?subject=Developer%20Support%20Query" 
-                  className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-amber-300"
-                >
-                  📩 Developer Contact Us
-                </a>
+                <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2 bg-[#1a1a1a] rounded-xl text-xs">Refer & Earn</button>
               </div>
             </div>
-
-            {/* Sidebar Bottom Footer Support Info */}
-            <div className="text-center text-[10px] text-gray-400 border-t border-[#222] pt-3 pb-1 space-y-1">
-              <p className="font-semibold text-gray-300">Support: <span className="text-blue-400 underline select-all">support.ytlove@gmail.com</span></p>
-              <p className="text-gray-500">SocialBoost v2.6</p>
-            </div>
+            <div className="text-center text-[10px] text-gray-500 pb-2">SocialBoost v2.6</div>
           </div>
           <div className="flex-1" onClick={() => setIsSidebarOpen(false)}></div>
         </div>
