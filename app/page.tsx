@@ -71,11 +71,12 @@ export default function Home() {
   const [lastClaimDate, setLastClaimDate] = useState("");
   const [hasClaimedToday, setHasClaimedToday] = useState(false);
 
-  // In-App Watch Player Overlay States
+  // In-App Watch Overlay States
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
   const [isWatching, setIsWatching] = useState(false);
   const [activeVideoUrl, setActiveVideoUrl] = useState("");
+  const [activeWatchPlatform, setActiveWatchPlatform] = useState("YouTube");
   const [clickCount, setClickCount] = useState(0);
   const [copySuccess, setCopySuccess] = useState("");
 
@@ -453,11 +454,17 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isWatching, timer]);
 
-  const startWatching = (link: string) => {
+  const startWatching = (link: string, plat: string) => {
     if (!link) return;
     setActiveVideoUrl(link);
+    setActiveWatchPlatform(plat);
     setIsWatching(true);
     setTimer(60);
+
+    // If Facebook or Instagram, also open link in a background tab to ensure user can engage
+    if (plat !== "YouTube") {
+      window.open(link, "_blank");
+    }
   };
 
   const handleSkipCampaign = () => {
@@ -605,11 +612,11 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // FULL SCREEN LOGIN VIEW (Background Photo 100% Uncut + Repositioned Buttons)
+  // FULL SCREEN LOGIN VIEW: Shifted Buttons + Interactive Google Login Overlay
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-[#0a0a0a] p-4">
-        {/* Full Image Background Without Cropping Side Icons */}
+        {/* Full Image Background */}
         <div 
           className="absolute inset-0 z-0 bg-contain bg-center bg-no-repeat" 
           style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}
@@ -623,8 +630,9 @@ export default function Home() {
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Bottom Area: Repositioned Signin & Signup Buttons Above Google Continue Bar */}
-        <div className="relative z-10 flex flex-col items-center mb-28 space-y-2">
+        {/* Bottom Area: Shifted Signin/Signup Buttons + Clickable Google Banner */}
+        <div className="relative z-10 flex flex-col items-center mb-6 space-y-5">
+          {/* Shifted Up Buttons */}
           <div className="flex space-x-6">
             <button 
               type="button" 
@@ -642,7 +650,16 @@ export default function Home() {
               Signup
             </button>
           </div>
-          <p className="text-[9px] text-gray-300 font-medium drop-shadow pt-0.5">Secure authentication powered by Firebase</p>
+
+          {/* Clickable Transparent Trigger over Background's Google Bar */}
+          <button 
+            type="button"
+            onClick={handleGoogleLogin}
+            className="w-4/5 h-14 bg-transparent border-none cursor-pointer focus:outline-none"
+            title="Continue with Google"
+          ></button>
+
+          <p className="text-[9px] text-gray-400 font-medium drop-shadow pt-0.5">Secure authentication powered by Firebase</p>
         </div>
 
         {/* Modal Popup (Opens on Signin or Signup click) */}
@@ -768,10 +785,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* Floating In-App Video Player Overlay with Live Timer & Coins */}
+      {/* In-App Floating Live Timer & Video Watch Overlay (YouTube/FB/Insta Support) */}
       {isWatching && activeVideoUrl && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-4">
-          <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10">
+          <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10 shadow-lg">
             <div className="flex items-center space-x-2">
               <span className="text-red-500 font-bold">⏱️ Timer:</span>
               <span className="text-base font-black text-amber-300">{timer}s</span>
@@ -782,18 +799,36 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Embedded Web Frame */}
-          <div className="w-full flex-1 my-3 bg-black rounded-2xl overflow-hidden border border-[#333]">
-            <iframe 
-              src={getEmbedUrl(activeVideoUrl)} 
-              title="Campaign Viewer"
-              className="w-full h-full border-0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            ></iframe>
+          {/* Player Area: YouTube Embed or FB/Insta Direct Interaction View */}
+          <div className="w-full flex-1 my-3 bg-[#111] rounded-2xl overflow-hidden border border-[#333] flex flex-col items-center justify-center p-4">
+            {activeWatchPlatform === "YouTube" ? (
+              <iframe 
+                src={getEmbedUrl(activeVideoUrl)} 
+                title="YouTube Video Player"
+                className="w-full h-full border-0 rounded-xl"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            ) : (
+              <div className="text-center space-y-4">
+                <span className="text-5xl animate-bounce">{activeWatchPlatform === "Facebook" ? "📘" : "📸"}</span>
+                <div className="space-y-1">
+                  <p className="text-sm font-black text-white">{activeWatchPlatform} Task in Progress</p>
+                  <p className="text-xs text-gray-400">Keep watching until the timer finishes.</p>
+                </div>
+                <a 
+                  href={activeVideoUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className={`inline-block px-5 py-2.5 rounded-xl font-bold text-xs text-white shadow-lg ${activeWatchPlatform === "Facebook" ? 'bg-blue-600 hover:bg-blue-700' : 'bg-pink-600 hover:bg-pink-700'}`}
+                >
+                  Open Post on {activeWatchPlatform}
+                </a>
+              </div>
+            )}
           </div>
 
-          <div className="bg-[#181818] p-3 rounded-2xl text-center">
+          <div className="bg-[#181818] p-3 rounded-2xl text-center border border-white/5">
             <p className="text-[11px] font-bold text-gray-300">Reward will auto-claim when timer reaches 0s. Please wait.</p>
           </div>
         </div>
@@ -936,10 +971,10 @@ export default function Home() {
                       </div>
                     )}
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-black/40 text-center">
-                      <button onClick={() => startWatching(activeCampaignToShow?.link)} className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-lg mb-2 hover:scale-105 transition ${watchTheme.activeBg}`}>
+                      <button onClick={() => startWatching(activeCampaignToShow?.link, activeCampaignToShow?.platform || platform)} className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-lg mb-2 hover:scale-105 transition ${watchTheme.activeBg}`}>
                         ▶
                       </button>
-                      <button onClick={() => startWatching(activeCampaignToShow?.link)} className="text-xs text-white font-bold underline bg-black/60 px-3 py-1.5 rounded-lg">
+                      <button onClick={() => startWatching(activeCampaignToShow?.link, activeCampaignToShow?.platform || platform)} className="text-xs text-white font-bold underline bg-black/60 px-3 py-1.5 rounded-lg">
                         Play & Earn Points
                       </button>
                     </div>
