@@ -19,17 +19,6 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install Dependencies
-        run: npm install --legacy-peer-deps
-
-      - name: Build Next.js Static Export
-        run: npm run build
-
-      - name: Ensure Android Project Sync
-        run: |
-          npx cap add android || true
-          npx cap sync android
-
       - name: Setup Java JDK 17
         uses: actions/setup-java@v4
         with:
@@ -39,14 +28,29 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK with Gradle
+      - name: Install Dependencies
+        run: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+
+      - name: Build Next.js Static Web
+        run: npx next build
+
+      - name: Sync & Build Capacitor Android
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build APK via Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK File
         uses: actions/upload-artifact@v4
         with:
-          name: SocialBoost-App
+          name: SocialBoost-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
