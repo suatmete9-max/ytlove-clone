@@ -391,15 +391,31 @@ export default function Home() {
     alert(`Successfully claimed Day ${streakDay} Bonus: ${earned} Coins! 🎉`);
   };
 
-  // Video embed link resolver
-  const getEmbedUrl = (url: string) => {
+  // Video embed link resolver for YouTube, Instagram, and Facebook
+  const getEmbedUrl = (url: string, plat: string) => {
     if (!url) return "";
-    if (url.includes("youtube.com/watch?v=")) {
-      return url.replace("watch?v=", "embed/") + "?autoplay=1&controls=1";
+    
+    if (plat === "YouTube" || url.includes("youtu")) {
+      if (url.includes("youtube.com/watch?v=")) {
+        return url.replace("watch?v=", "embed/") + "?autoplay=1&controls=1";
+      }
+      if (url.includes("youtu.be/")) {
+        return url.replace("youtu.be/", "www.youtube.com/embed/") + "?autoplay=1&controls=1";
+      }
+      if (url.includes("youtube.com/shorts/")) {
+        return url.replace("/shorts/", "/embed/") + "?autoplay=1&controls=1";
+      }
     }
-    if (url.includes("youtu.be/")) {
-      return url.replace("youtu.be/", "www.youtube.com/embed/") + "?autoplay=1&controls=1";
+    
+    if (plat === "Instagram" || url.includes("instagram.com")) {
+      const cleanUrl = url.split("?")[0].replace(/\/$/, "");
+      return `${cleanUrl}/embed/captioned/`;
     }
+
+    if (plat === "Facebook" || url.includes("facebook.com")) {
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=0&autoplay=1`;
+    }
+
     return url;
   };
 
@@ -460,11 +476,6 @@ export default function Home() {
     setActiveWatchPlatform(plat);
     setIsWatching(true);
     setTimer(60);
-
-    // If Facebook or Instagram, also open link in a background tab to ensure user can engage
-    if (plat !== "YouTube") {
-      window.open(link, "_blank");
-    }
   };
 
   const handleSkipCampaign = () => {
@@ -612,11 +623,11 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // FULL SCREEN LOGIN VIEW: Shifted Buttons + Interactive Google Login Overlay
+  // FULL SCREEN MOBILE FIT LOGIN VIEW
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-[#0a0a0a] p-4">
-        {/* Full Image Background */}
+        {/* Aspect-Locked Full Screen Background */}
         <div 
           className="absolute inset-0 z-0 bg-contain bg-center bg-no-repeat" 
           style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}
@@ -624,20 +635,20 @@ export default function Home() {
 
         {/* Top Header Bonus Badge */}
         <div className="relative z-10 flex flex-col items-center pt-2 space-y-1">
-          <div className="bg-black/75 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md shadow-lg">
+          <div className="bg-black/80 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md shadow-lg">
             <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Bottom Area: Shifted Signin/Signup Buttons + Clickable Google Banner */}
-        <div className="relative z-10 flex flex-col items-center mb-6 space-y-5">
-          {/* Shifted Up Buttons */}
-          <div className="flex space-x-6">
+        {/* Bottom Area: Precise Alignment above Native Google Container */}
+        <div className="relative z-10 flex flex-col items-center mb-4 space-y-4">
+          {/* Shifted Up Red Signin / Signup Action Buttons */}
+          <div className="flex space-x-5">
             <button 
               type="button" 
               onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
+              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signin
             </button>
@@ -645,21 +656,21 @@ export default function Home() {
             <button 
               type="button" 
               onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
+              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signup
             </button>
           </div>
 
-          {/* Clickable Transparent Trigger over Background's Google Bar */}
+          {/* Clickable Area Overlay for Native Continue with Google Button */}
           <button 
             type="button"
             onClick={handleGoogleLogin}
-            className="w-4/5 h-14 bg-transparent border-none cursor-pointer focus:outline-none"
+            className="w-11/12 h-12 bg-transparent border-none cursor-pointer focus:outline-none"
             title="Continue with Google"
           ></button>
 
-          <p className="text-[9px] text-gray-400 font-medium drop-shadow pt-0.5">Secure authentication powered by Firebase</p>
+          <p className="text-[9px] text-gray-400 font-medium drop-shadow">Secure authentication powered by Firebase</p>
         </div>
 
         {/* Modal Popup (Opens on Signin or Signup click) */}
@@ -785,9 +796,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* In-App Floating Live Timer & Video Watch Overlay (YouTube/FB/Insta Support) */}
+      {/* In-App Floating Live Timer & Full Video Player Overlay (YouTube, Instagram, Facebook Support) */}
       {isWatching && activeVideoUrl && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-4">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-3">
           <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10 shadow-lg">
             <div className="flex items-center space-x-2">
               <span className="text-red-500 font-bold">⏱️ Timer:</span>
@@ -799,36 +810,18 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Player Area: YouTube Embed or FB/Insta Direct Interaction View */}
-          <div className="w-full flex-1 my-3 bg-[#111] rounded-2xl overflow-hidden border border-[#333] flex flex-col items-center justify-center p-4">
-            {activeWatchPlatform === "YouTube" ? (
-              <iframe 
-                src={getEmbedUrl(activeVideoUrl)} 
-                title="YouTube Video Player"
-                className="w-full h-full border-0 rounded-xl"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
-            ) : (
-              <div className="text-center space-y-4">
-                <span className="text-5xl animate-bounce">{activeWatchPlatform === "Facebook" ? "📘" : "📸"}</span>
-                <div className="space-y-1">
-                  <p className="text-sm font-black text-white">{activeWatchPlatform} Task in Progress</p>
-                  <p className="text-xs text-gray-400">Keep watching until the timer finishes.</p>
-                </div>
-                <a 
-                  href={activeVideoUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className={`inline-block px-5 py-2.5 rounded-xl font-bold text-xs text-white shadow-lg ${activeWatchPlatform === "Facebook" ? 'bg-blue-600 hover:bg-blue-700' : 'bg-pink-600 hover:bg-pink-700'}`}
-                >
-                  Open Post on {activeWatchPlatform}
-                </a>
-              </div>
-            )}
+          {/* Cross-Platform Universal Embed Engine */}
+          <div className="w-full flex-1 my-2.5 bg-[#111] rounded-2xl overflow-hidden border border-[#333] flex items-center justify-center relative">
+            <iframe 
+              src={getEmbedUrl(activeVideoUrl, activeWatchPlatform)} 
+              title={`${activeWatchPlatform} Player`}
+              className="w-full h-full border-0 rounded-xl"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            ></iframe>
           </div>
 
-          <div className="bg-[#181818] p-3 rounded-2xl text-center border border-white/5">
+          <div className="bg-[#181818] p-2.5 rounded-2xl text-center border border-white/5">
             <p className="text-[11px] font-bold text-gray-300">Reward will auto-claim when timer reaches 0s. Please wait.</p>
           </div>
         </div>
