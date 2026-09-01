@@ -141,7 +141,7 @@ export default function Home() {
       } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
         setAuthError("Incorrect Email or Password.");
       } else if (err.code === "auth/email-already-in-use") {
-        setAuthError("Email already registered! Please Sign In.");
+        setAuthError("Email already registered! Click Signin below.");
       } else {
         setAuthError(err.message || "Authentication Failed");
       }
@@ -592,15 +592,14 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // REDESIGNED LOGIN SCREEN (Upper Placement & Mode Toggle Buttons)
+  // EXACT MATCH LOGIN SCREEN ACCORDING TO SCREENSHOT
   if (!user) {
     return (
-      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-start text-white bg-black p-4">
+      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-4">
         {/* Full Image Background */}
         <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
-        <div className="absolute inset-0 bg-black/25 z-0"></div>
 
-        {/* Top Header Bonus Tag */}
+        {/* Top Header Badge */}
         <div className="relative z-10 flex flex-col items-center pt-2 space-y-1">
           <div className="bg-black/70 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md">
             <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
@@ -608,8 +607,8 @@ export default function Home() {
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Compact Form Card Positioned Upper for Better Background Visibility */}
-        <div className="relative z-10 space-y-2 mt-4">
+        {/* Center Main Login Box */}
+        <div className="relative z-10 space-y-2 mt-2">
           {authError && (
             <p className="text-[10px] text-red-300 text-center bg-red-950/80 border border-red-800 p-1.5 rounded-xl">{authError}</p>
           )}
@@ -618,33 +617,15 @@ export default function Home() {
             <p className="text-[10px] text-green-300 text-center bg-green-950/80 border border-green-800 p-1.5 rounded-xl">{authSuccess}</p>
           )}
 
-          <div className="bg-black/80 border border-white/20 p-3.5 rounded-2xl space-y-2.5 backdrop-blur-md shadow-2xl">
-            {/* Top 2 Buttons: Sign In / Sign Up Mode Toggle */}
-            <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#181818] rounded-xl border border-white/10">
-              <button 
-                type="button" 
-                onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }}
-                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${!isSignUp && !isForgotPassword ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-              >
-                Sign In
-              </button>
-              <button 
-                type="button" 
-                onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }}
-                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${isSignUp ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
-              >
-                Sign Up
-              </button>
-            </div>
-
-            <form onSubmit={handleEmailAuth} className="space-y-2.5">
+          <div className="bg-black/85 border border-white/15 p-4 rounded-2xl space-y-3 backdrop-blur-md shadow-2xl">
+            <form onSubmit={handleEmailAuth} className="space-y-3">
               <input 
                 type="email" 
                 required 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 placeholder="Enter Your Email" 
-                className="w-full bg-[#181818]/90 border border-white/15 p-2 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                className="w-full bg-[#181818]/90 border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
               />
 
               {!isForgotPassword && (
@@ -654,7 +635,7 @@ export default function Home() {
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)} 
                   placeholder="Enter Your Password" 
-                  className="w-full bg-[#181818]/90 border border-white/15 p-2 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                  className="w-full bg-[#181818]/90 border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
                 />
               )}
 
@@ -670,24 +651,44 @@ export default function Home() {
                 </div>
               )}
 
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl text-xs shadow-lg transition">
-                {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Sign In"}
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition">
+                {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Sign Up" : "Sign In"}
               </button>
             </form>
 
             {!isForgotPassword && (
-              <div className="pt-1 border-t border-white/10">
-                <button 
-                  type="button"
-                  onClick={handleGoogleLogin} 
-                  className="w-full bg-white py-2 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
-                >
-                  <span className="text-sm font-bold text-red-600">G</span>
-                  <span>Continue with Google</span>
-                </button>
-              </div>
+              <button 
+                type="button"
+                onClick={handleGoogleLogin} 
+                className="w-full bg-white py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
+              >
+                <span className="text-sm font-bold text-red-600">G</span>
+                <span>Continue with Google</span>
+              </button>
             )}
           </div>
+        </div>
+
+        {/* Bottom Placement Exact Overlap Buttons (Signin & Signup) */}
+        <div className="relative z-10 flex flex-col items-center mb-6 space-y-2">
+          <div className="flex space-x-12">
+            <button 
+              type="button" 
+              onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
+              className={`px-3 py-1 rounded font-bold text-xs shadow-md ${!isSignUp ? 'bg-red-600 text-white' : 'bg-red-900/60 text-gray-200'}`}
+            >
+              Signin
+            </button>
+
+            <button 
+              type="button" 
+              onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
+              className={`px-3 py-1 rounded font-bold text-xs shadow-md ${isSignUp ? 'bg-red-600 text-white' : 'bg-red-900/60 text-gray-200'}`}
+            >
+              Signup
+            </button>
+          </div>
+          <p className="text-[9px] text-gray-300 font-medium drop-shadow pt-1">Secure authentication powered by Firebase</p>
         </div>
       </main>
     );
