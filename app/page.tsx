@@ -1134,7 +1134,7 @@ export default function Home() {
                     <img 
                       src={
                         paymentMethod === "UPI" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}` 
+                          ? "/paytm-qr.png"
                           : paymentMethod === "BEP20" 
                           ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(BEP20_ADDRESS)}` 
                           : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(TRC20_ADDRESS)}`
