@@ -71,10 +71,11 @@ export default function Home() {
   const [lastClaimDate, setLastClaimDate] = useState("");
   const [hasClaimedToday, setHasClaimedToday] = useState(false);
 
+  // In-App Watch Player Overlay States
   const [timer, setTimer] = useState(60);
   const [rewardCoins, setRewardCoins] = useState(60);
   const [isWatching, setIsWatching] = useState(false);
-  const [canClaim, setCanClaim] = useState(false);
+  const [activeVideoUrl, setActiveVideoUrl] = useState("");
   const [clickCount, setClickCount] = useState(0);
   const [copySuccess, setCopySuccess] = useState("");
 
@@ -389,35 +390,19 @@ export default function Home() {
     alert(`Successfully claimed Day ${streakDay} Bonus: ${earned} Coins! 🎉`);
   };
 
-  useEffect(() => {
-    let interval: any;
-    if (isWatching && timer > 0) {
-      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
-    } else if (timer === 0 && isWatching) {
-      setCanClaim(true);
-      setIsWatching(false);
-      autoClaimReward();
+  // Video embed link resolver
+  const getEmbedUrl = (url: string) => {
+    if (!url) return "";
+    if (url.includes("youtube.com/watch?v=")) {
+      return url.replace("watch?v=", "embed/") + "?autoplay=1&controls=1";
     }
-    return () => clearInterval(interval);
-  }, [isWatching, timer]);
-
-  const startWatching = (link: string) => {
-    if (!link) return;
-    window.open(link, "_blank");
-    setIsWatching(true);
-    setCanClaim(false);
-    setTimer(60);
+    if (url.includes("youtu.be/")) {
+      return url.replace("youtu.be/", "www.youtube.com/embed/") + "?autoplay=1&controls=1";
+    }
+    return url;
   };
 
-  const handleSkipCampaign = () => {
-    if (allLiveCampaigns.length > 0) {
-      setCurrentCampaignIndex((prev) => (prev + 1) % allLiveCampaigns.length);
-      setTimer(60);
-      setIsWatching(false);
-      setCanClaim(false);
-    }
-  };
-
+  // Auto-Reward function when timer completes
   const autoClaimReward = async () => {
     if (!user) return;
     
@@ -451,8 +436,37 @@ export default function Home() {
         }
       }
 
+      setIsWatching(false);
+      setActiveVideoUrl("");
+      alert(`🎉 Congratulations! You earned ${rewardCoins} Coins.`);
       handleSkipCampaign();
     });
+  };
+
+  useEffect(() => {
+    let interval: any;
+    if (isWatching && timer > 0) {
+      interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
+    } else if (timer === 0 && isWatching) {
+      autoClaimReward();
+    }
+    return () => clearInterval(interval);
+  }, [isWatching, timer]);
+
+  const startWatching = (link: string) => {
+    if (!link) return;
+    setActiveVideoUrl(link);
+    setIsWatching(true);
+    setTimer(60);
+  };
+
+  const handleSkipCampaign = () => {
+    if (allLiveCampaigns.length > 0) {
+      setCurrentCampaignIndex((prev) => (prev + 1) % allLiveCampaigns.length);
+      setTimer(60);
+      setIsWatching(false);
+      setActiveVideoUrl("");
+    }
   };
 
   const getCampaignCost = () => {
@@ -591,28 +605,31 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // CLEAN LOGIN SCREEN: Photo Fully Visible + Signin/Signup Buttons Above Bottom Banner
+  // FULL SCREEN LOGIN VIEW (Background Photo 100% Uncut + Repositioned Buttons)
   if (!user) {
     return (
-      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-4">
-        {/* Full Image Background (No Box Obstructing Default View) */}
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
+      <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-[#0a0a0a] p-4">
+        {/* Full Image Background Without Cropping Side Icons */}
+        <div 
+          className="absolute inset-0 z-0 bg-contain bg-center bg-no-repeat" 
+          style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}
+        ></div>
 
         {/* Top Header Bonus Badge */}
         <div className="relative z-10 flex flex-col items-center pt-2 space-y-1">
-          <div className="bg-black/70 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md">
+          <div className="bg-black/75 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md shadow-lg">
             <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
           </div>
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Bottom Area: Signin & Signup Buttons Positioned Slightly Above the Google Banner */}
-        <div className="relative z-10 flex flex-col items-center mb-20 space-y-2">
+        {/* Bottom Area: Repositioned Signin & Signup Buttons Above Google Continue Bar */}
+        <div className="relative z-10 flex flex-col items-center mb-28 space-y-2">
           <div className="flex space-x-6">
             <button 
               type="button" 
               onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/40"
+              className="bg-red-600 hover:bg-red-700 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signin
             </button>
@@ -620,18 +637,18 @@ export default function Home() {
             <button 
               type="button" 
               onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/40"
+              className="bg-red-600 hover:bg-red-700 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signup
             </button>
           </div>
-          <p className="text-[9px] text-gray-300 font-medium drop-shadow pt-1">Secure authentication powered by Firebase</p>
+          <p className="text-[9px] text-gray-300 font-medium drop-shadow pt-0.5">Secure authentication powered by Firebase</p>
         </div>
 
-        {/* Modal Popup (Only opens when user clicks Signin or Signup) */}
+        {/* Modal Popup (Opens on Signin or Signup click) */}
         {showAuthModal && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-[#111] border border-white/20 p-4 rounded-3xl space-y-3 shadow-2xl">
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-[#111] border border-white/20 p-5 rounded-3xl space-y-3.5 shadow-2xl">
               <div className="flex justify-between items-center border-b border-white/10 pb-2">
                 <button 
                   type="button" 
@@ -647,11 +664,11 @@ export default function Home() {
               </div>
 
               {authError && (
-                <p className="text-[10px] text-red-400 text-center bg-red-950/80 border border-red-800 p-1.5 rounded-xl">{authError}</p>
+                <p className="text-[10px] text-red-400 text-center bg-red-950/80 border border-red-800 p-2 rounded-xl">{authError}</p>
               )}
 
               {authSuccess && (
-                <p className="text-[10px] text-green-400 text-center bg-green-950/80 border border-green-800 p-1.5 rounded-xl">{authSuccess}</p>
+                <p className="text-[10px] text-green-400 text-center bg-green-950/80 border border-green-800 p-2 rounded-xl">{authSuccess}</p>
               )}
 
               <form onSubmit={handleEmailAuth} className="space-y-3">
@@ -748,6 +765,37 @@ export default function Home() {
       {copySuccess && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white text-xs font-bold px-4 py-2 rounded-full shadow-2xl animate-bounce">
           {copySuccess}
+        </div>
+      )}
+
+      {/* Floating In-App Video Player Overlay with Live Timer & Coins */}
+      {isWatching && activeVideoUrl && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-4">
+          <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10">
+            <div className="flex items-center space-x-2">
+              <span className="text-red-500 font-bold">⏱️ Timer:</span>
+              <span className="text-base font-black text-amber-300">{timer}s</span>
+            </div>
+            <div className="flex items-center space-x-1.5">
+              <span className="text-red-500 font-bold">❤️ Points:</span>
+              <span className="text-base font-black text-emerald-400">{rewardCoins}</span>
+            </div>
+          </div>
+
+          {/* Embedded Web Frame */}
+          <div className="w-full flex-1 my-3 bg-black rounded-2xl overflow-hidden border border-[#333]">
+            <iframe 
+              src={getEmbedUrl(activeVideoUrl)} 
+              title="Campaign Viewer"
+              className="w-full h-full border-0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+
+          <div className="bg-[#181818] p-3 rounded-2xl text-center">
+            <p className="text-[11px] font-bold text-gray-300">Reward will auto-claim when timer reaches 0s. Please wait.</p>
+          </div>
         </div>
       )}
 
@@ -891,9 +939,9 @@ export default function Home() {
                       <button onClick={() => startWatching(activeCampaignToShow?.link)} className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl shadow-lg mb-2 hover:scale-105 transition ${watchTheme.activeBg}`}>
                         ▶
                       </button>
-                      <a href={activeCampaignToShow?.link} target="_blank" rel="noopener noreferrer" className="text-xs text-white font-bold underline bg-black/60 px-2 py-1 rounded-lg">
-                        Open & View on {activeCampaignToShow.platform || platform}
-                      </a>
+                      <button onClick={() => startWatching(activeCampaignToShow?.link)} className="text-xs text-white font-bold underline bg-black/60 px-3 py-1.5 rounded-lg">
+                        Play & Earn Points
+                      </button>
                     </div>
                   </>
                 ) : (
