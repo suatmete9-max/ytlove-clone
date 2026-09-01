@@ -81,7 +81,7 @@ export default function Home() {
   const [copySuccess, setCopySuccess] = useState("");
 
   const UPI_ID = "paytmqr5mq7io@ptys";
-  const BEP20_ADDRESS = "0x34fedDCC9D4f4d80f027287AeDe19AC9B103410a8";
+  const BEP20_ADDRESS = "0x34feDCC9D4f4d80f027287AeDe19AC9B103410a8";
   const TRC20_ADDRESS = "TGVe1eqacpBCSujj4CVh3nPriu24RxDyB";
   
   const USD_RATE = 88;
@@ -623,11 +623,11 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // FULL SCREEN MOBILE FIT LOGIN VIEW
+  // FULL SCREEN MOBILE FIT LOGIN VIEW (Shifted Up Buttons & Native Trigger)
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-[#0a0a0a] p-4">
-        {/* Aspect-Locked Full Screen Background */}
+        {/* Full Image Background */}
         <div 
           className="absolute inset-0 z-0 bg-contain bg-center bg-no-repeat" 
           style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}
@@ -641,14 +641,14 @@ export default function Home() {
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Bottom Area: Precise Alignment above Native Google Container */}
-        <div className="relative z-10 flex flex-col items-center mb-4 space-y-4">
-          {/* Shifted Up Red Signin / Signup Action Buttons */}
-          <div className="flex space-x-5">
+        {/* Bottom Area: Signin / Signup Buttons Shifted Up Above Google Container */}
+        <div className="relative z-10 flex flex-col items-center mb-10 space-y-7">
+          {/* Shifted Higher Up Buttons */}
+          <div className="flex space-x-6">
             <button 
               type="button" 
               onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
+              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signin
             </button>
@@ -656,17 +656,17 @@ export default function Home() {
             <button 
               type="button" 
               onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
-              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
+              className="bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black px-7 py-2.5 rounded-2xl text-xs shadow-2xl transition border border-red-400/50 uppercase tracking-wider"
             >
               Signup
             </button>
           </div>
 
-          {/* Clickable Area Overlay for Native Continue with Google Button */}
+          {/* Transparent Overlay for Background Google Button */}
           <button 
             type="button"
             onClick={handleGoogleLogin}
-            className="w-11/12 h-12 bg-transparent border-none cursor-pointer focus:outline-none"
+            className="w-11/12 h-14 bg-transparent border-none cursor-pointer focus:outline-none"
             title="Continue with Google"
           ></button>
 
@@ -796,7 +796,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* In-App Floating Live Timer & Full Video Player Overlay (YouTube, Instagram, Facebook Support) */}
+      {/* In-App Floating Live Timer & Full Video Player Overlay */}
       {isWatching && activeVideoUrl && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-3">
           <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10 shadow-lg">
@@ -1121,28 +1121,26 @@ export default function Home() {
             {walletTab === "Add Fund" ? (
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-1 bg-[#111] p-1 rounded-xl border border-[#222]">
-                  <button type="button" onClick={() => setPaymentMethod("UPI")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "UPI" ? "bg-blue-600 text-white" : "text-gray-400"}`}>UPI QR</button>
-                  <button type="button" onClick={() => setPaymentMethod("BEP20")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "BEP20" ? "bg-amber-600 text-white" : "text-gray-400"}`}>BEP20</button>
-                  <button type="button" onClick={() => setPaymentMethod("TRC20")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "TRC20" ? "bg-red-600 text-white" : "text-gray-400"}`}>TRC20</button>
+                  <button type="button" onClick={() => setPaymentMethod("UPI")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "UPI" ? "bg-blue-600 text-white" : "text-gray-400"}`}>Paytm UPI</button>
+                  <button type="button" onClick={() => setPaymentMethod("BEP20")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "BEP20" ? "bg-amber-600 text-white" : "text-gray-400"}`}>BNB (BEP20)</button>
+                  <button type="button" onClick={() => setPaymentMethod("TRC20")} className={`py-1 text-[11px] font-bold rounded-lg ${paymentMethod === "TRC20" ? "bg-red-600 text-white" : "text-gray-400"}`}>Tron (TRC20)</button>
                 </div>
 
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
-                  <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod}</p>
+                  <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod === "UPI" ? "Paytm / UPI" : `${paymentMethod} USDT`}</p>
                   
-                  <div className="w-40 h-40 bg-white mx-auto rounded-xl flex items-center justify-center p-2 shadow-md overflow-hidden">
+                  {/* Clean High-Resolution QR Codes */}
+                  <div className="w-48 h-48 bg-white mx-auto rounded-2xl flex items-center justify-center p-2 shadow-2xl overflow-hidden border border-gray-200">
                     <img 
                       src={
                         paymentMethod === "UPI" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}` 
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`upi://pay?pa=${UPI_ID}&pn=SocialBoost`)}` 
                           : paymentMethod === "BEP20" 
-                          ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(BEP20_ADDRESS)}` 
-                          : `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(TRC20_ADDRESS)}`
+                          ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(BEP20_ADDRESS)}` 
+                          : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(TRC20_ADDRESS)}`
                       } 
                       alt={`${paymentMethod} QR Code`} 
                       className="w-full h-full object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=${encodeURIComponent(paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS)}`;
-                      }}
                     />
                   </div>
 
@@ -1153,7 +1151,7 @@ export default function Home() {
                     <button 
                       type="button"
                       onClick={() => copyToClipboard(paymentMethod === "UPI" ? UPI_ID : paymentMethod === "BEP20" ? BEP20_ADDRESS : TRC20_ADDRESS, paymentMethod)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2.5 py-1.5 rounded-lg shrink-0"
+                      className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shrink-0"
                     >
                       Copy
                     </button>
