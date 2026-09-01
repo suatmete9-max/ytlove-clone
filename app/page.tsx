@@ -149,11 +149,17 @@ export default function Home() {
     }
   };
 
+  // Safe Unity Ads Initialization with Window Check
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).unityads) {
-      (window as any).unityads.init(UNITY_GAME_ID, false, () => {
-        showBannerAd();
-      });
+    if (typeof window === "undefined") return;
+    try {
+      if ((window as any).unityads) {
+        (window as any).unityads.init(UNITY_GAME_ID, false, () => {
+          showBannerAd();
+        });
+      }
+    } catch (e) {
+      console.log("Unity ads safe init error:", e);
     }
   }, []);
 
@@ -191,15 +197,17 @@ export default function Home() {
   };
 
   useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          setUser(result.user);
-        }
-      })
-      .catch((err) => {
-        console.error("Redirect Login Error:", err);
-      });
+    if (typeof window !== "undefined") {
+      getRedirectResult(auth)
+        .then((result) => {
+          if (result?.user) {
+            setUser(result.user);
+          }
+        })
+        .catch((err) => {
+          console.error("Redirect Login Error:", err);
+        });
+    }
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -391,7 +399,6 @@ export default function Home() {
     alert(`Successfully claimed Day ${streakDay} Bonus: ${earned} Coins! 🎉`);
   };
 
-  // Video embed link resolver for YouTube, Instagram, and Facebook
   const getEmbedUrl = (url: string, plat: string) => {
     if (!url) return "";
     
@@ -419,7 +426,6 @@ export default function Home() {
     return url;
   };
 
-  // Auto-Reward function when timer completes
   const autoClaimReward = async () => {
     if (!user) return;
     
@@ -585,9 +591,11 @@ export default function Home() {
   };
 
   const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    setCopySuccess(`${label} Copied!`);
-    setTimeout(() => setCopySuccess(""), 2500);
+    if (typeof window !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setCopySuccess(`${label} Copied!`);
+      setTimeout(() => setCopySuccess(""), 2500);
+    }
   };
 
   const getMediaThumbnail = (url: string, plat: string) => {
@@ -623,17 +631,14 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // FULL SCREEN MOBILE FIT LOGIN VIEW (Shifted Up Buttons & Native Trigger)
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-[#0a0a0a] p-4">
-        {/* Full Image Background */}
         <div 
           className="absolute inset-0 z-0 bg-contain bg-center bg-no-repeat" 
           style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}
         ></div>
 
-        {/* Top Header Bonus Badge */}
         <div className="relative z-10 flex flex-col items-center pt-2 space-y-1">
           <div className="bg-black/80 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md shadow-lg">
             <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
@@ -641,9 +646,7 @@ export default function Home() {
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Bottom Area: Signin / Signup Buttons Shifted Up Above Google Container */}
         <div className="relative z-10 flex flex-col items-center mb-10 space-y-7">
-          {/* Shifted Higher Up Buttons */}
           <div className="flex space-x-6 relative -top-12">
             <button 
               type="button" 
@@ -662,7 +665,6 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Transparent Overlay for Background Google Button */}
           <button 
             type="button"
             onClick={handleGoogleLogin}
@@ -673,7 +675,6 @@ export default function Home() {
           <p className="text-[9px] text-gray-400 font-medium drop-shadow">Secure authentication powered by Firebase</p>
         </div>
 
-        {/* Modal Popup (Opens on Signin or Signup click) */}
         {showAuthModal && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <div className="w-full max-w-sm bg-[#111] border border-white/20 p-5 rounded-3xl space-y-3.5 shadow-2xl">
@@ -796,7 +797,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* In-App Floating Live Timer & Full Video Player Overlay */}
       {isWatching && activeVideoUrl && (
         <div className="fixed inset-0 z-50 bg-black/95 flex flex-col justify-between p-3">
           <div className="flex justify-between items-center bg-[#181818] p-3 rounded-2xl border border-white/10 shadow-lg">
@@ -810,7 +810,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Cross-Platform Universal Embed Engine */}
           <div className="w-full flex-1 my-2.5 bg-[#111] rounded-2xl overflow-hidden border border-[#333] flex items-center justify-center relative">
             <iframe 
               src={getEmbedUrl(activeVideoUrl, activeWatchPlatform)} 
@@ -827,7 +826,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Header */}
       <div className={`fixed top-0 left-0 right-0 max-w-md mx-auto p-3 flex justify-between items-center z-40 border-b border-[#222] transition-all duration-500 ${platform !== "YouTube" && bottomTab === "watch" ? watchTheme.headerBg : platform !== "YouTube" && bottomTab === "campaign" ? campaignTheme.headerBg : "bg-[#111]"}`}>
         <div className="flex items-center space-x-2">
           {bottomTab !== "campaign" && (
@@ -847,7 +845,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Sidebar Navigation */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/80 z-50 flex">
           <div className="w-4/5 max-w-xs bg-[#111] h-full p-5 flex flex-col justify-between overflow-y-auto">
@@ -857,7 +854,6 @@ export default function Home() {
                 <button onClick={() => setIsSidebarOpen(false)} className="text-lg font-bold">✕</button>
               </div>
 
-              {/* Enter Referral Code Block */}
               <div className="bg-[#181818] border border-[#2a2a2a] p-3 rounded-2xl space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-amber-400">🎁 Enter Referral Code</span>
@@ -906,7 +902,6 @@ export default function Home() {
               <div className="space-y-2 text-sm pt-2">
                 <button onClick={() => { setBottomTab("refer"); setIsSidebarOpen(false); }} className="w-full text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium">🤝 Refer & Earn</button>
                 
-                {/* Support Email Link */}
                 <a 
                   href="mailto:support.ytlove@gmail.com?subject=Support%20Query" 
                   className="w-full block text-left p-2.5 bg-[#1a1a1a] hover:bg-[#222] rounded-xl text-xs font-medium text-blue-400"
@@ -916,7 +911,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* App Developer Email in Pink Color */}
             <div className="text-center text-[10px] border-t border-[#222] pt-3 pb-1 space-y-1">
               <p className="font-semibold text-pink-400">App Developer: <a href="mailto:developerappwebsite@gmail.com" className="underline select-all">developerappwebsite@gmail.com</a></p>
               <p className="text-gray-500">SocialBoost v2.6</p>
@@ -926,7 +920,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 pt-16 pb-24">
 
         {bottomTab === "watch" && (
@@ -1129,7 +1122,6 @@ export default function Home() {
                 <div className="bg-[#111] border border-[#222] p-4 rounded-2xl text-center space-y-2">
                   <p className="text-xs text-gray-400">Scan & Pay via {paymentMethod === "UPI" ? "Paytm / UPI" : `${paymentMethod} USDT`}</p>
                   
-                  {/* Clean High-Resolution QR Codes */}
                   <div className="w-48 h-48 bg-white mx-auto rounded-2xl flex items-center justify-center p-2 shadow-2xl overflow-hidden border border-gray-200">
                     <img 
                       src={
@@ -1302,7 +1294,6 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-[#111] border-t border-[#222] p-2 flex justify-around items-center z-40">
         {(["watch", "campaign", "wallet", "refer", "profile"] as const).map((tab) => (
           <button key={tab} onClick={() => setBottomTab(tab)} className={`flex flex-col items-center py-1 px-3 rounded-xl transition-colors ${bottomTab === tab ? "text-red-500 font-bold" : "text-gray-400"}`}>
