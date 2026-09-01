@@ -644,7 +644,7 @@ export default function Home() {
         {/* Bottom Area: Signin / Signup Buttons Shifted Up Above Google Container */}
         <div className="relative z-10 flex flex-col items-center mb-10 space-y-7">
           {/* Shifted Higher Up Buttons */}
-          <div className="flex space-x-6">
+          <div className="flex space-x-6 relative -top-8">
             <button 
               type="button" 
               onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
