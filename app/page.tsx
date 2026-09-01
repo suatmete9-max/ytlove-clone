@@ -25,7 +25,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Auth States
+  // Auth & Modal States
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -39,8 +40,6 @@ export default function Home() {
   const [myReferralCode, setMyReferralCode] = useState("");
   const [inputRefCode, setInputRefCode] = useState("");
   const [hasEnteredRef, setHasEnteredRef] = useState(false);
-  
-  const [dailyEnteredCount, setDailyEnteredCount] = useState(0);
   
   const [bottomTab, setBottomTab] = useState<"watch" | "campaign" | "wallet" | "refer" | "profile">("watch");
   
@@ -141,7 +140,7 @@ export default function Home() {
       } else if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
         setAuthError("Incorrect Email or Password.");
       } else if (err.code === "auth/email-already-in-use") {
-        setAuthError("Email already registered! Click Signin below.");
+        setAuthError("Email already registered! Click Signin.");
       } else {
         setAuthError(err.message || "Authentication Failed");
       }
@@ -592,14 +591,14 @@ export default function Home() {
 
   if (loading) return <main className="h-screen bg-black flex items-center justify-center"><p className="text-white font-bold animate-pulse">Loading SocialBoost...</p></main>;
 
-  // EXACT MATCH LOGIN SCREEN ACCORDING TO SCREENSHOT
+  // CLEAN LOGIN SCREEN: Photo Fully Visible + Signin/Signup Buttons Above Bottom Banner
   if (!user) {
     return (
       <main className="h-screen w-full max-w-md mx-auto relative overflow-hidden flex flex-col justify-between text-white bg-black p-4">
-        {/* Full Image Background */}
+        {/* Full Image Background (No Box Obstructing Default View) */}
         <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: `url('/login-bg.png.jpeg')` }}></div>
 
-        {/* Top Header Badge */}
+        {/* Top Header Bonus Badge */}
         <div className="relative z-10 flex flex-col items-center pt-2 space-y-1">
           <div className="bg-black/70 border border-white/20 py-1 px-3 rounded-full text-center backdrop-blur-md">
             <p className="text-[10px] font-bold text-amber-300">🔥 First 100 Users Get Rs 20 Signup Bonus! 🔥</p>
@@ -607,89 +606,125 @@ export default function Home() {
           <h1 className="text-lg font-black tracking-tight text-white drop-shadow-md">SocialBoost</h1>
         </div>
 
-        {/* Center Main Login Box */}
-        <div className="relative z-10 space-y-2 mt-2">
-          {authError && (
-            <p className="text-[10px] text-red-300 text-center bg-red-950/80 border border-red-800 p-1.5 rounded-xl">{authError}</p>
-          )}
-
-          {authSuccess && (
-            <p className="text-[10px] text-green-300 text-center bg-green-950/80 border border-green-800 p-1.5 rounded-xl">{authSuccess}</p>
-          )}
-
-          <div className="bg-black/85 border border-white/15 p-4 rounded-2xl space-y-3 backdrop-blur-md shadow-2xl">
-            <form onSubmit={handleEmailAuth} className="space-y-3">
-              <input 
-                type="email" 
-                required 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                placeholder="Enter Your Email" 
-                className="w-full bg-[#181818]/90 border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
-              />
-
-              {!isForgotPassword && (
-                <input 
-                  type="password" 
-                  required 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                  placeholder="Enter Your Password" 
-                  className="w-full bg-[#181818]/90 border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
-                />
-              )}
-
-              {!isSignUp && !isForgotPassword && (
-                <div className="text-right">
-                  <button 
-                    type="button" 
-                    onClick={() => { setIsForgotPassword(true); setAuthError(""); setAuthSuccess(""); }}
-                    className="text-[10px] text-amber-400 hover:underline"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-              )}
-
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition">
-                {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Sign Up" : "Sign In"}
-              </button>
-            </form>
-
-            {!isForgotPassword && (
-              <button 
-                type="button"
-                onClick={handleGoogleLogin} 
-                className="w-full bg-white py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
-              >
-                <span className="text-sm font-bold text-red-600">G</span>
-                <span>Continue with Google</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom Placement Exact Overlap Buttons (Signin & Signup) */}
-        <div className="relative z-10 flex flex-col items-center mb-6 space-y-2">
-          <div className="flex space-x-12">
+        {/* Bottom Area: Signin & Signup Buttons Positioned Slightly Above the Google Banner */}
+        <div className="relative z-10 flex flex-col items-center mb-20 space-y-2">
+          <div className="flex space-x-6">
             <button 
               type="button" 
-              onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
-              className={`px-3 py-1 rounded font-bold text-xs shadow-md ${!isSignUp ? 'bg-red-600 text-white' : 'bg-red-900/60 text-gray-200'}`}
+              onClick={() => { setIsSignUp(false); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
+              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/40"
             >
               Signin
             </button>
 
             <button 
               type="button" 
-              onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
-              className={`px-3 py-1 rounded font-bold text-xs shadow-md ${isSignUp ? 'bg-red-600 text-white' : 'bg-red-900/60 text-gray-200'}`}
+              onClick={() => { setIsSignUp(true); setIsForgotPassword(false); setShowAuthModal(true); setAuthError(""); setAuthSuccess(""); }} 
+              className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow-2xl transition border border-red-400/40"
             >
               Signup
             </button>
           </div>
           <p className="text-[9px] text-gray-300 font-medium drop-shadow pt-1">Secure authentication powered by Firebase</p>
         </div>
+
+        {/* Modal Popup (Only opens when user clicks Signin or Signup) */}
+        {showAuthModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-[#111] border border-white/20 p-4 rounded-3xl space-y-3 shadow-2xl">
+              <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowAuthModal(false)} 
+                  className="text-xs font-bold text-gray-400 hover:text-white"
+                >
+                  ← Back
+                </button>
+                <span className="text-xs font-bold text-amber-400">
+                  {isForgotPassword ? "Reset Password" : isSignUp ? "Create Account" : "Sign In"}
+                </span>
+                <div className="w-8"></div>
+              </div>
+
+              {authError && (
+                <p className="text-[10px] text-red-400 text-center bg-red-950/80 border border-red-800 p-1.5 rounded-xl">{authError}</p>
+              )}
+
+              {authSuccess && (
+                <p className="text-[10px] text-green-400 text-center bg-green-950/80 border border-green-800 p-1.5 rounded-xl">{authSuccess}</p>
+              )}
+
+              <form onSubmit={handleEmailAuth} className="space-y-3">
+                <input 
+                  type="email" 
+                  required 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="Enter Your Email" 
+                  className="w-full bg-[#181818] border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+
+                {!isForgotPassword && (
+                  <input 
+                    type="password" 
+                    required 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    placeholder="Enter Your Password" 
+                    className="w-full bg-[#181818] border border-white/15 p-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                  />
+                )}
+
+                {!isSignUp && !isForgotPassword && (
+                  <div className="text-right">
+                    <button 
+                      type="button" 
+                      onClick={() => { setIsForgotPassword(true); setAuthError(""); setAuthSuccess(""); }}
+                      className="text-[10px] text-amber-400 hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
+
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg transition">
+                  {isForgotPassword ? "Send Password Reset Link" : isSignUp ? "Register Account" : "Sign In"}
+                </button>
+              </form>
+
+              <div className="pt-2 border-t border-white/10">
+                <button 
+                  type="button"
+                  onClick={handleGoogleLogin} 
+                  className="w-full bg-white py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-md hover:bg-gray-100 text-black font-bold text-xs transition"
+                >
+                  <span className="text-sm font-bold text-red-600">G</span>
+                  <span>Continue with Google</span>
+                </button>
+              </div>
+
+              <div className="flex justify-between text-[10px] text-gray-400 pt-1">
+                {isForgotPassword ? (
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsForgotPassword(false); setAuthError(""); setAuthSuccess(""); }} 
+                    className="underline text-amber-400 font-bold"
+                  >
+                    ← Back to Sign In
+                  </button>
+                ) : (
+                  <button 
+                    type="button" 
+                    onClick={() => { setIsSignUp(!isSignUp); setAuthError(""); setAuthSuccess(""); }} 
+                    className="underline text-gray-300 font-medium"
+                  >
+                    {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     );
   }
